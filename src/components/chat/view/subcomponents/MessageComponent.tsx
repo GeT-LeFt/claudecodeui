@@ -10,7 +10,7 @@ import type {
 import { formatUsageLimitText } from '../../utils/chatFormatting';
 import { getClaudePermissionSuggestion } from '../../utils/chatPermissions';
 import type { Project } from '../../../../types/app';
-import { ToolRenderer, shouldHideToolResult } from '../../tools';
+import { ToolRenderer, shouldHideToolResult, isSdkInternalError } from '../../tools';
 import { Markdown } from './Markdown';
 import MessageCopyControl from './MessageCopyControl';
 
@@ -156,6 +156,14 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, o
             <span className="text-xs text-gray-500 dark:text-gray-400">{message.content}</span>
           </div>
         </div>
+      ) : message.isSystemNotification ? (
+        /* Compact system notification (e.g., conversation compacted) */
+        <div className="w-full">
+          <div className="flex items-center gap-2 py-0.5">
+            <span className="inline-block h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-400 dark:bg-blue-500" />
+            <span className="text-xs text-gray-500 dark:text-gray-400">{message.content}</span>
+          </div>
+        </div>
       ) : (
         /* Claude/Error/Tool messages on the left */
         <div className="w-full">
@@ -182,7 +190,7 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, o
 
           <div className="w-full">
 
-            {message.isToolUse ? (
+            {message.isToolUse && !isSdkInternalError(message.toolResult) ? (
               <>
                 <div className="flex flex-col">
                   <div className="flex flex-col">

@@ -587,6 +587,17 @@ export function getToolConfig(toolName: string): ToolDisplayConfig {
 }
 
 /**
+ * Check if a tool error is an SDK internal validation error that should be hidden from users.
+ * These errors occur when the model generates tool parameters that don't match the schema
+ * (e.g., AskUserQuestion with < 2 options). The SDK catches them and the model auto-retries.
+ */
+export function isSdkInternalError(toolResult: any): boolean {
+  if (!toolResult?.isError) return false;
+  const content = String(toolResult.content || '');
+  return content.includes('InputValidationError');
+}
+
+/**
  * Check if a tool result should be hidden
  */
 export function shouldHideToolResult(toolName: string, toolResult: any): boolean {
