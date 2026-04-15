@@ -9,10 +9,10 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm ci --ignore-scripts
 
 COPY . .
-RUN npm run build
+RUN npm rebuild && npm run build
 
 # ---- Stage 2: Production ----
 FROM node:22-slim
@@ -28,6 +28,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY scripts ./scripts
 RUN npm ci --omit=dev --ignore-scripts && \
+    npm rebuild && \
     node scripts/fix-node-pty.js
 
 # Copy built outputs from builder
