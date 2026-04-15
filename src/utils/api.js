@@ -21,7 +21,6 @@ export const authenticatedFetch = (url, options = {}, backendOpts = {}) => {
 
   return fetch(fullUrl, {
     ...options,
-    ...(baseUrl ? { credentials: 'include' } : {}),
     headers: {
       ...defaultHeaders,
       ...options.headers,
@@ -255,13 +254,11 @@ export const createApiClient = (baseUrl, tokenKey) => {
       login: (username, password) => fetch(baseUrl ? `${baseUrl}/api/auth/login` : '/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        ...(baseUrl ? { credentials: 'include' } : {}),
         body: JSON.stringify({ username, password }),
       }),
       register: (username, password) => fetch(baseUrl ? `${baseUrl}/api/auth/register` : '/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        ...(baseUrl ? { credentials: 'include' } : {}),
         body: JSON.stringify({ username, password }),
       }),
       user: () => bf('/api/auth/user'),
