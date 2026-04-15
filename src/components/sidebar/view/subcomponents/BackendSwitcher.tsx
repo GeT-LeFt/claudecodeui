@@ -23,18 +23,25 @@ export default function BackendSwitcher() {
 
   // Health check when active backend changes
   useEffect(() => {
+    let cancelled = false;
     setBackendStatus('checking');
     const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
     const healthUrl = activeBackend.url ? `${activeBackend.url}/health` : '/health';
-    fetch(healthUrl, { method: 'GET', signal: AbortSignal.timeout(5000) })
+    fetch(healthUrl, { method: 'GET', signal: controller.signal })
       .then((res) => {
-        if (!controller.signal.aborted) setBackendStatus(res.ok ? 'reachable' : 'unreachable');
+        if (!cancelled) setBackendStatus(res.ok ? 'reachable' : 'unreachable');
       })
       .catch(() => {
-        if (!controller.signal.aborted) setBackendStatus('unreachable');
-      });
-    return () => controller.abort();
-  }, [activeBackend]);
+        if (!cancelled) setBackendStatus('unreachable');
+      })
+      .finally(() => clearTimeout(timeoutId));
+    return () => {
+      cancelled = true;
+      controller.abort();
+      clearTimeout(timeoutId);
+    };
+  }, [activeBackend.id]);
 
   const statusColor =
     backendStatus === 'checking' ? 'bg-gray-400' :
