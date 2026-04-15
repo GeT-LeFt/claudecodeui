@@ -850,6 +850,59 @@ function reconnectSessionWriter(sessionId, newRawWs) {
   return true;
 }
 
+// ── SDK supported commands (cached) ──────────────────────────────────────────
+
+let sdkCommandsCache = null;
+let sdkCommandsCacheTime = 0;
+const SDK_COMMANDS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+// Known SDK commands as fallback when no active session exists
+const SDK_COMMANDS_FALLBACK = [
+  { name: 'compact', description: 'Compact conversation to reduce context size', argumentHint: '' },
+  { name: 'review', description: 'Review code changes', argumentHint: '' },
+  { name: 'pr-comments', description: 'View PR comments', argumentHint: '' },
+  { name: 'init', description: 'Initialize project configuration', argumentHint: '' },
+  { name: 'terminal-setup', description: 'Set up terminal integration', argumentHint: '' },
+  { name: 'listen', description: 'Listen for changes', argumentHint: '' },
+  { name: 'login', description: 'Log in to your account', argumentHint: '' },
+  { name: 'logout', description: 'Log out of your account', argumentHint: '' },
+  { name: 'bug', description: 'Report a bug', argumentHint: '' },
+  { name: 'permissions', description: 'View and manage permissions', argumentHint: '' },
+  { name: 'mcp', description: 'Manage MCP servers', argumentHint: '' },
+  { name: 'approved-tools', description: 'View approved tools', argumentHint: '' },
+  { name: 'doctors', description: 'Run diagnostics', argumentHint: '' },
+];
+
+/**
+ * Get supported slash commands from the SDK.
+ * Uses a module-level cache since the command list doesn't change at runtime.
+ * Falls back to a known command list when no active session exists.
+ * @param {string} [sessionId] - Optional session ID to look up a specific Query instance
+ * @returns {Promise<Array<{name: string, description: string, argumentHint: string}>>}
+ */
+async function getSupportedCommands(sessionId) {
+  if (sdkCommandsCache && Date.now() - sdkCommandsCacheTime < SDK_COMMANDS_CACHE_TTL) {
+    return sdkCommandsCache;
+  }
+  // Find an active session's Query instance
+  const session = sessionId
+    ? activeSessions.get(sessionId)
+    : activeSessions.values().next().value;
+  if (!session?.instance) {
+    // No active session — return fallback commands
+    return SDK_COMMANDS_FALLBACK;
+  }
+  try {
+    const commands = await session.instance.supportedCommands();
+    sdkCommandsCache = commands || [];
+    sdkCommandsCacheTime = Date.now();
+    return sdkCommandsCache;
+  } catch (e) {
+    console.warn('[claude-sdk] supportedCommands() failed:', e.message);
+    return SDK_COMMANDS_FALLBACK;
+  }
+}
+
 // Export public API
 export {
   queryClaudeSDK,
@@ -858,5 +911,6 @@ export {
   getActiveClaudeSDKSessions,
   resolveToolApproval,
   getPendingApprovalsForSession,
-  reconnectSessionWriter
+  reconnectSessionWriter,
+  getSupportedCommands
 };

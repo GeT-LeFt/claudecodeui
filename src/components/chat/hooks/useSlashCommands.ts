@@ -23,6 +23,7 @@ interface UseSlashCommandsOptions {
   setInput: Dispatch<SetStateAction<string>>;
   textareaRef: RefObject<HTMLTextAreaElement>;
   onExecuteCommand: (command: SlashCommand, rawInput?: string) => void | Promise<void>;
+  currentSessionId?: string | null;
 }
 
 const getCommandHistoryKey = (projectName: string) => `command_history_${projectName}`;
@@ -54,6 +55,7 @@ export function useSlashCommands({
   setInput,
   textareaRef,
   onExecuteCommand,
+  currentSessionId,
 }: UseSlashCommandsOptions) {
   const [slashCommands, setSlashCommands] = useState<SlashCommand[]>([]);
   const [filteredCommands, setFilteredCommands] = useState<SlashCommand[]>([]);
@@ -95,6 +97,7 @@ export function useSlashCommands({
           },
           body: JSON.stringify({
             projectPath: selectedProject.path,
+            sessionId: currentSessionId,
           }),
         });
 
@@ -107,6 +110,10 @@ export function useSlashCommands({
           ...((data.builtIn || []) as SlashCommand[]).map((command) => ({
             ...command,
             type: 'built-in',
+          })),
+          ...((data.sdk || []) as SlashCommand[]).map((command) => ({
+            ...command,
+            type: 'sdk',
           })),
           ...((data.custom || []) as SlashCommand[]).map((command) => ({
             ...command,
@@ -129,7 +136,7 @@ export function useSlashCommands({
     };
 
     fetchCommands();
-  }, [selectedProject]);
+  }, [selectedProject, currentSessionId]);
 
   useEffect(() => {
     if (!showCommandMenu) {

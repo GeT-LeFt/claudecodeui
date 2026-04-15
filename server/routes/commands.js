@@ -5,6 +5,7 @@ import os from 'os';
 import { CLAUDE_MODELS, CURSOR_MODELS, CODEX_MODELS } from '../../shared/modelConstants.js';
 import { parseFrontmatter } from '../utils/frontmatter.js';
 import { findAppRoot, getModuleDir } from '../utils/runtime-paths.js';
+import { getSupportedCommands } from '../claude-sdk.js';
 
 const __dirname = getModuleDir(import.meta.url);
 // This route reads the top-level package.json for the status command, so it needs the real
@@ -407,7 +408,7 @@ Custom commands can be created in:
  */
 router.post('/list', async (req, res) => {
   try {
-    const { projectPath } = req.body;
+    const { projectPath, sessionId } = req.body;
     const allCommands = [...builtInCommands];
 
     // Scan project-level commands (.claude/commands/)
@@ -437,10 +438,35 @@ router.post('/list', async (req, res) => {
     // Sort commands alphabetically by name
     customCommands.sort((a, b) => a.name.localeCompare(b.name));
 
+    // Get SDK native commands (e.g. /compact, /review)
+    let sdkCommands = [];
+    try {
+      const rawSdkCommands = await getSupportedCommands(sessionId);
+      const builtInNames = new Set(builtInCommands.map(c => c.name));
+      sdkCommands = rawSdkCommands
+        .filter(c => {
+          // SDK command names may or may not have leading slash
+          const withSlash = c.name.startsWith('/') ? c.name : `/${c.name}`;
+          return !builtInNames.has(withSlash);
+        })
+        .map(c => {
+          const name = c.name.startsWith('/') ? c.name : `/${c.name}`;
+          return {
+            name,
+            description: c.description || '',
+            namespace: 'sdk',
+            metadata: { type: 'sdk', argumentHint: c.argumentHint || '' },
+          };
+        });
+    } catch (e) {
+      console.warn('[commands] Failed to get SDK commands:', e.message);
+    }
+
     res.json({
       builtIn: builtInCommands,
       custom: customCommands,
-      count: allCommands.length
+      sdk: sdkCommands,
+      count: allCommands.length + sdkCommands.length
     });
   } catch (error) {
     console.error('Error listing commands:', error);

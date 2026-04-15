@@ -270,6 +270,19 @@ export function useChatComposerState({
         return;
       }
 
+      // SDK native commands: send as regular prompt (SDK handles them natively)
+      if (command.type === 'sdk') {
+        const rawCommand = rawInput ?? command.name;
+        setInput(rawCommand);
+        inputValueRef.current = rawCommand;
+        setTimeout(() => {
+          if (handleSubmitRef.current) {
+            handleSubmitRef.current(createFakeSubmitEvent());
+          }
+        }, 0);
+        return;
+      }
+
       try {
         const effectiveInput = rawInput ?? input;
         const commandMatch = effectiveInput.match(new RegExp(`${escapeRegExp(command.name)}\\s*(.*)`));
@@ -362,6 +375,7 @@ export function useChatComposerState({
     setInput,
     textareaRef,
     onExecuteCommand: executeCommand,
+    currentSessionId,
   });
 
   const {
@@ -473,7 +487,8 @@ export function useChatComposerState({
         const firstSpace = trimmedInput.indexOf(' ');
         const commandName = firstSpace > 0 ? trimmedInput.slice(0, firstSpace) : trimmedInput;
         const matchedCommand = slashCommands.find((cmd: SlashCommand) => cmd.name === commandName);
-        if (matchedCommand) {
+        // SDK commands are NOT intercepted — they flow through as regular prompts (SDK handles them natively)
+        if (matchedCommand && matchedCommand.type !== 'sdk') {
           executeCommand(matchedCommand, trimmedInput);
           setInput('');
           inputValueRef.current = '';
