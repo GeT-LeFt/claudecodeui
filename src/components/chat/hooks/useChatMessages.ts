@@ -32,16 +32,27 @@ export function normalizedToChatMessages(messages: NormalizedMessage[]): ChatMes
         if (!content.trim()) continue;
 
         if (msg.role === 'user') {
-          // Parse task notifications
-          const taskNotifRegex = /<task-notification>\s*<task-id>[^<]*<\/task-id>\s*<output-file>[^<]*<\/output-file>\s*<status>([^<]*)<\/status>\s*<summary>([^<]*)<\/summary>\s*<\/task-notification>/g;
-          const taskNotifMatch = taskNotifRegex.exec(content);
-          if (taskNotifMatch) {
+          // Parse task notifications (background task completion & monitor events)
+          const isTaskNotif = /<task-notification>/.test(content);
+          if (isTaskNotif) {
+            const statusMatch = content.match(/<status>([^<]*)<\/status>/);
+            const summaryMatch = content.match(/<summary>([^<]*)<\/summary>/);
+            const eventMatch = content.match(/<event>([^<]*)<\/event>/);
+
+            // Monitor event format: has <event>, may lack <status>
+            // Background task format: has <status> and <summary>
+            const taskStatus = statusMatch?.[1]?.trim()
+              || (eventMatch?.[1]?.includes('in_progress') ? 'in_progress' : 'completed');
+            const displayContent = eventMatch
+              ? `${summaryMatch?.[1]?.trim() || 'Monitor event'}\n${eventMatch[1].trim()}`
+              : summaryMatch?.[1]?.trim() || 'Background task finished';
+
             converted.push({
               type: 'assistant',
-              content: taskNotifMatch[2]?.trim() || 'Background task finished',
+              content: displayContent,
               timestamp: msg.timestamp,
               isTaskNotification: true,
-              taskStatus: taskNotifMatch[1]?.trim() || 'completed',
+              taskStatus,
             });
           } else {
             let userContent = unescapeWithMathProtection(decodeHtmlEntities(content));
