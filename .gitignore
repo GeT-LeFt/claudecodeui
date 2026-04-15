@@ -114,7 +114,11 @@ CLAUDE.md
 # Database files
 *.db
 *.sqlite
-*.sqlite3 
+*.sqlite3
+
+# Test results
+test-results/
+playwright-report/
 
 logs
 dev-debug.log
