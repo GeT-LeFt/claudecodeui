@@ -337,6 +337,9 @@ export function useChatRealtimeHandlers({
           });
           setIsLoading(true);
           setCanAbortSession(msg.canInterrupt !== false);
+        } else if (!msg.text && !msg.tokenBudget) {
+          // Status cleared (e.g., compact completed) — reset status indicator
+          setClaudeStatus(null);
         }
         break;
       }
