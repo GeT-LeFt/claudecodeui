@@ -134,20 +134,28 @@ jobs:
             echo "tag=staging-${SHA_SHORT}" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Build Docker image
-        run: |
-          docker build \
-            --tag ${{ secrets.ACR_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }} \
-            --tag ${{ secrets.ACR_REGISTRY }}/${{ env.IMAGE_NAME }}:latest-${{ steps.meta.outputs.env }} \
-            --label "org.opencontainers.image.revision=${{ github.sha }}" \
-            --label "org.opencontainers.image.created=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
-            .
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
 
       - name: Generate build size report
         run: |
           npm ci
           npm run build
           npm run build:size-report
+
+      - name: Build Docker image
+        run: |
+          echo "=== Dockerfile check ==="
+          head -5 Dockerfile
+          echo "=== Building ==="
+          docker build \
+            --tag ${{ secrets.ACR_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }} \
+            --tag ${{ secrets.ACR_REGISTRY }}/${{ env.IMAGE_NAME }}:latest-${{ steps.meta.outputs.env }} \
+            --label "org.opencontainers.image.revision=${{ github.sha }}" \
+            --label "org.opencontainers.image.created=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+            .
 
       - name: Upload build size report
         uses: actions/upload-artifact@v4
