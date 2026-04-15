@@ -22,11 +22,12 @@ const ACTIVE_BACKEND_STORAGE_KEY = 'active-backend-id';
 const AUTH_TOKEN_STORAGE_KEY = 'auth-token';
 
 // Pre-configured environments — no manual setup needed
+// Both use explicit URLs so switching works regardless of which UI the user is viewing.
 const PRESET_BACKENDS: BackendConfig[] = [
   {
     id: 'local',
     name: 'Local Mac',
-    url: '',  // same-origin
+    url: 'http://localhost:3001',
   },
   {
     id: 'cloud',
@@ -37,8 +38,14 @@ const PRESET_BACKENDS: BackendConfig[] = [
 
 // ────────────────────── Helpers ──────────────────────
 
-export const getBackendTokenKey = (backendUrl: string): string =>
-  backendUrl ? `${AUTH_TOKEN_STORAGE_KEY}::${backendUrl}` : AUTH_TOKEN_STORAGE_KEY;
+export const getBackendTokenKey = (backendUrl: string): string => {
+  if (!backendUrl) return AUTH_TOKEN_STORAGE_KEY;
+  try {
+    const backendOrigin = new URL(backendUrl).origin;
+    if (backendOrigin === window.location.origin) return AUTH_TOKEN_STORAGE_KEY;
+  } catch { /* invalid URL, treat as remote */ }
+  return `${AUTH_TOKEN_STORAGE_KEY}::${backendUrl}`;
+};
 
 const loadActiveBackendId = (): string => {
   return localStorage.getItem(ACTIVE_BACKEND_STORAGE_KEY) || 'local';

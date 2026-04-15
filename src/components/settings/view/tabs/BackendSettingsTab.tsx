@@ -59,7 +59,7 @@ export default function BackendSettingsTab() {
                     )}
                   </div>
                   <div className="text-xs text-muted-foreground/70">
-                    {backend.url || window.location.origin}
+                    {backend.url}
                   </div>
                 </div>
 
