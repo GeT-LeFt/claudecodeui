@@ -1,12 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 import { Server, ChevronDown, Check } from 'lucide-react';
 import { useBackend } from '../../../../contexts/BackendContext';
-import { useWebSocket } from '../../../../contexts/WebSocketContext';
 
 export default function BackendSwitcher() {
   const { backends, activeBackend, switchBackend } = useBackend();
-  const { isConnected } = useWebSocket();
   const [isOpen, setIsOpen] = useState(false);
+  const [backendStatus, setBackendStatus] = useState<'checking' | 'reachable' | 'unreachable'>('checking');
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown on click outside
@@ -22,7 +21,24 @@ export default function BackendSwitcher() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen]);
 
-  const statusColor = isConnected ? 'bg-green-500' : 'bg-red-500';
+  // Health check when active backend changes
+  useEffect(() => {
+    setBackendStatus('checking');
+    const controller = new AbortController();
+    const healthUrl = activeBackend.url ? `${activeBackend.url}/health` : '/health';
+    fetch(healthUrl, { method: 'GET', signal: AbortSignal.timeout(5000) })
+      .then((res) => {
+        if (!controller.signal.aborted) setBackendStatus(res.ok ? 'reachable' : 'unreachable');
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setBackendStatus('unreachable');
+      });
+    return () => controller.abort();
+  }, [activeBackend]);
+
+  const statusColor =
+    backendStatus === 'checking' ? 'bg-gray-400' :
+    backendStatus === 'reachable' ? 'bg-green-500' : 'bg-red-500';
 
   return (
     <div className="relative" ref={dropdownRef}>
