@@ -51,7 +51,8 @@ export const SubagentContainer: React.FC<SubagentContainerProps> = ({
   const subagentType = parsedInput?.subagent_type || 'Agent';
   const description = parsedInput?.description || 'Running task';
   const prompt = parsedInput?.prompt || '';
-  const { childTools, currentToolIndex, isComplete } = subagentState;
+  const { childTools: rawChildTools, currentToolIndex, isComplete } = subagentState;
+  const childTools = Array.isArray(rawChildTools) ? rawChildTools : [];
   const currentTool = currentToolIndex >= 0 ? childTools[currentToolIndex] : null;
 
   const title = `Subagent / ${subagentType}: ${description}`;

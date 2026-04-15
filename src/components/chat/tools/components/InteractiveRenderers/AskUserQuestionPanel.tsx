@@ -7,7 +7,7 @@ export const AskUserQuestionPanel: React.FC<PermissionPanelProps> = ({
   onDecision,
 }) => {
   const input = request.input as { questions?: Question[] } | undefined;
-  const questions: Question[] = input?.questions || [];
+  const questions: Question[] = Array.isArray(input?.questions) ? input.questions : [];
 
   const [currentStep, setCurrentStep] = useState(0);
   const [selections, setSelections] = useState<Map<number, Set<string>>>(() => new Map());
@@ -96,7 +96,7 @@ export const AskUserQuestionPanel: React.FC<PermissionPanelProps> = ({
     const q = questions[currentStep];
     if (!q) return;
     const multi = q.multiSelect || false;
-    const optCount = q.options.length;
+    const optCount = Array.isArray(q.options) ? q.options.length : 0;
 
     // Number keys 1-9 for options
     const num = parseInt(e.key);
@@ -219,7 +219,7 @@ export const AskUserQuestionPanel: React.FC<PermissionPanelProps> = ({
         {/* Options — tight spacing */}
         <div className="scrollbar-thin max-h-48 overflow-y-auto px-4 pb-2" role={multi ? 'group' : 'radiogroup'} aria-label={q.question}>
           <div className="space-y-1">
-            {q.options.map((opt, optIdx) => {
+            {Array.isArray(q.options) && q.options.map((opt, optIdx) => {
               const isSelected = selected.has(opt.label);
               return (
                 <button

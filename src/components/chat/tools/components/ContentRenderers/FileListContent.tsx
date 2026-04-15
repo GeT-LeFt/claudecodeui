@@ -20,6 +20,10 @@ export const FileListContent: React.FC<FileListContentProps> = ({
   onFileClick,
   title
 }) => {
+  if (!Array.isArray(files) || files.length === 0) {
+    return null;
+  }
+
   return (
     <div>
       {title && (
