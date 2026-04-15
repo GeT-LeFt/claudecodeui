@@ -1,0 +1,236 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main]
+
+env:
+  NODE_VERSION: '22'
+  IMAGE_NAME: cloudcli-ui
+
+jobs:
+  # ─── Stage 1: Code Quality ────────────────────────────────
+  lint-and-typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+  # ─── Stage 2a: Unit Tests ─────────────────────────────────
+  unit-test:
+    needs: lint-and-typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+
+      - name: Run unit tests with coverage
+        run: npm run test:unit:coverage
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 14
+
+  # ─── Stage 2b: E2E Tests ──────────────────────────────────
+  e2e-test:
+    needs: lint-and-typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Build application
+        run: npm run build
+
+      - name: Start server
+        run: node dist-server/server/index.js &
+        env:
+          SERVER_PORT: 3001
+          HOST: 127.0.0.1
+          NODE_ENV: test
+          LOG_LEVEL: warn
+
+      - name: Wait for server
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:3001/health > /dev/null 2>&1; then
+              echo "Server is ready"
+              exit 0
+            fi
+            echo "Waiting for server... ($i/30)"
+            sleep 2
+          done
+          echo "Server failed to start"
+          exit 1
+
+      - name: Run E2E tests
+        run: npm run test:e2e
+        env:
+          TEST_BASE_URL: http://127.0.0.1:3001
+
+      - name: Upload E2E report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14
+
+  # ─── Stage 3: Docker Build & Push to ACR ──────────────────
+  docker-build-push:
+    needs: [unit-test, e2e-test]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tag }}
+      deploy-env: ${{ steps.meta.outputs.env }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine environment
+        id: meta
+        run: |
+          SHA_SHORT=$(echo "${{ github.sha }}" | head -c 7)
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "env=production" >> "$GITHUB_OUTPUT"
+            echo "tag=prod-${SHA_SHORT}" >> "$GITHUB_OUTPUT"
+          else
+            echo "env=staging" >> "$GITHUB_OUTPUT"
+            echo "tag=staging-${SHA_SHORT}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            --tag ${{ secrets.ACR_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }} \
+            --tag ${{ secrets.ACR_REGISTRY }}/${{ env.IMAGE_NAME }}:latest-${{ steps.meta.outputs.env }} \
+            --label "org.opencontainers.image.revision=${{ github.sha }}" \
+            --label "org.opencontainers.image.created=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+            .
+
+      - name: Generate build size report
+        run: |
+          npm ci
+          npm run build
+          npm run build:size-report
+
+      - name: Upload build size report
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-size-report
+          path: build-size-report.json
+          retention-days: 30
+
+      - name: Login to ACR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.ACR_REGISTRY }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Push to ACR
+        run: |
+          docker push ${{ secrets.ACR_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }}
+          docker push ${{ secrets.ACR_REGISTRY }}/${{ env.IMAGE_NAME }}:latest-${{ steps.meta.outputs.env }}
+
+  # ─── Stage 4: Deploy to ECS ───────────────────────────────
+  deploy:
+    needs: docker-build-push
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    environment: ${{ needs.docker-build-push.outputs.deploy-env }}
+    steps:
+      - name: Resolve ECS host
+        id: host
+        run: |
+          if [[ "${{ needs.docker-build-push.outputs.deploy-env }}" == "production" ]]; then
+            echo "ecs_host=${{ secrets.ECS_HOST_PRODUCTION }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "ecs_host=${{ secrets.ECS_HOST_STAGING }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy to ECS
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ steps.host.outputs.ecs_host }}
+          username: ${{ secrets.ECS_USER }}
+          key: ${{ secrets.ECS_SSH_KEY }}
+          script: |
+            set -e
+            IMAGE="${{ secrets.ACR_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.docker-build-push.outputs.image-tag }}"
+
+            echo "[Deploy] Pulling image: $IMAGE"
+            docker pull "$IMAGE"
+
+            echo "[Deploy] Stopping old container..."
+            docker stop cloudcli-ui 2>/dev/null || true
+            docker rm cloudcli-ui 2>/dev/null || true
+
+            echo "[Deploy] Starting new container..."
+            docker run -d \
+              --name cloudcli-ui \
+              --restart unless-stopped \
+              -p 3001:3001 \
+              --env-file /opt/cloudcli/.env \
+              "$IMAGE"
+
+            echo "[Deploy] Waiting for health check..."
+            for i in $(seq 1 15); do
+              if curl -sf http://localhost:3001/health > /dev/null 2>&1; then
+                echo "[Deploy] Health check passed!"
+                exit 0
+              fi
+              echo "[Deploy] Waiting... ($i/15)"
+              sleep 3
+            done
+
+            echo "[Deploy] Health check failed!"
+            docker logs cloudcli-ui --tail 50
+            exit 1
+
+      - name: Deployment summary
+        run: |
+          echo "## Deployment Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Field | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-------|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Environment** | ${{ needs.docker-build-push.outputs.deploy-env }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Image Tag** | ${{ needs.docker-build-push.outputs.image-tag }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Commit** | ${{ github.sha }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Triggered by** | ${{ github.actor }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Timestamp** | $(date -u +'%Y-%m-%d %H:%M:%S UTC') |" >> "$GITHUB_STEP_SUMMARY"
