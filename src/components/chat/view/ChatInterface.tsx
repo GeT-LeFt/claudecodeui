@@ -9,6 +9,8 @@ import { useChatSessionState } from '../hooks/useChatSessionState';
 import { useChatRealtimeHandlers } from '../hooks/useChatRealtimeHandlers';
 import { useChatComposerState } from '../hooks/useChatComposerState';
 import { useSessionStore } from '../../../stores/useSessionStore';
+import { useBackend } from '../../../contexts/BackendContext';
+import { getBackendTokenKey } from '../../auth/constants';
 import ChatMessagesPane from './subcomponents/ChatMessagesPane';
 import ChatComposer from './subcomponents/ChatComposer';
 
@@ -45,7 +47,9 @@ function ChatInterface({
   const { tasksEnabled, isTaskMasterInstalled } = useTasksSettings();
   const { t } = useTranslation('chat');
 
-  const sessionStore = useSessionStore();
+  const { activeBackend } = useBackend();
+  const backendOpts = { baseUrl: activeBackend.url, tokenKey: getBackendTokenKey(activeBackend.url) };
+  const sessionStore = useSessionStore(backendOpts);
   const streamBufferRef = useRef('');
   const streamTimerRef = useRef<number | null>(null);
   const accumulatedStreamRef = useRef('');

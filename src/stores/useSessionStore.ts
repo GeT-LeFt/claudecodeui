@@ -150,7 +150,7 @@ const MAX_REALTIME_MESSAGES = 500;
 
 // ─── Hook ────────────────────────────────────────────────────────────────────
 
-export function useSessionStore() {
+export function useSessionStore(backendOpts: { baseUrl?: string; tokenKey?: string } = {}) {
   const storeRef = useRef(new Map<string, SessionSlot>());
   const activeSessionIdRef = useRef<string | null>(null);
   // Bump to force re-render — only when the active session's data changes
@@ -204,7 +204,7 @@ export function useSessionStore() {
 
       const qs = params.toString();
       const url = `/api/sessions/${encodeURIComponent(sessionId)}/messages${qs ? `?${qs}` : ''}`;
-      const response = await authenticatedFetch(url);
+      const response = await authenticatedFetch(url, {}, backendOpts);
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
@@ -261,8 +261,7 @@ export function useSessionStore() {
     const url = `/api/sessions/${encodeURIComponent(sessionId)}/messages${qs ? `?${qs}` : ''}`;
 
     try {
-      const response = await authenticatedFetch(url);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const response = await authenticatedFetch(url, {}, backendOpts);
       const data = await response.json();
       const olderMessages: NormalizedMessage[] = data.messages || [];
 
@@ -329,7 +328,7 @@ export function useSessionStore() {
 
       const qs = params.toString();
       const url = `/api/sessions/${encodeURIComponent(sessionId)}/messages${qs ? `?${qs}` : ''}`;
-      const response = await authenticatedFetch(url);
+      const response = await authenticatedFetch(url, {}, backendOpts);
 
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
