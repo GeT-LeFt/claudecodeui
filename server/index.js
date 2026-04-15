@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Load environment variables before other imports execute
 import './load-env.js';
+import './utils/process-error-handler.js';
 import fs from 'fs';
 import path from 'path';
 import { findAppRoot, getModuleDir } from './utils/runtime-paths.js';
@@ -73,6 +74,11 @@ import { configureWebPush } from './services/vapid-keys.js';
 import { validateApiKey, authenticateToken, authenticateWebSocket } from './middleware/auth.js';
 import { IS_PLATFORM } from './constants/config.js';
 import { getConnectableHost } from '../shared/networkHosts.js';
+import logger from './utils/logger.js';
+import { setServerInstance } from './utils/process-error-handler.js';
+import requestLogger from './middleware/request-logger.js';
+import healthRoutes from './routes/health.js';
+import errorHandler from './middleware/error-handler.js';
 
 const VALID_PROVIDERS = ['claude', 'codex', 'cursor', 'gemini'];
 
@@ -344,14 +350,11 @@ app.use(express.json({
 }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// Public health check endpoint (no authentication required)
-app.get('/health', (req, res) => {
-    res.json({
-        status: 'ok',
-        timestamp: new Date().toISOString(),
-        installMode
-    });
-});
+// Structured request logging
+app.use(requestLogger);
+
+// Health check routes (public, no auth)
+app.use(healthRoutes);
 
 // Optional API key validation (if configured)
 app.use('/api', validateApiKey);
@@ -2289,6 +2292,9 @@ app.get('*', (req, res) => {
     }
 });
 
+// Global error handler (must be after all routes)
+app.use(errorHandler);
+
 // Helper function to convert permissions to rwx format
 function permToRwx(perm) {
     const r = perm & 4 ? 'r' : '-';
@@ -2402,6 +2408,7 @@ async function startServer() {
         console.log(`${c.info('[INFO]')} To run in development mode with hot-module replacement, go to http://${DISPLAY_HOST}:${VITE_PORT}`);
    
         server.listen(SERVER_PORT, HOST, async () => {
+            setServerInstance(server);
             const appInstallPath = APP_ROOT;
 
             console.log('');
