@@ -27,7 +27,8 @@ WORKDIR /app
 
 COPY package.json package-lock.json ./
 COPY scripts ./scripts
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev --ignore-scripts && \
+    node scripts/fix-node-pty.js
 
 # Copy built outputs from builder
 COPY --from=builder /app/dist ./dist
