@@ -1,11 +1,15 @@
 export function decodeHtmlEntities(text: string) {
   if (!text) return text;
+  // Decode numeric (&#123; &#x1F;) and named (&lt; &gt; etc.) HTML entities
   return text
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(parseInt(dec, 10)))
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
-    .replace(/&amp;/g, '&');
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&'); // &amp; must be last to avoid double-decoding
 }
 
 export function normalizeInlineCodeFences(text: string) {
@@ -49,7 +53,9 @@ export function escapeRegExp(value: string) {
 export function formatUsageLimitText(text: string) {
   try {
     if (typeof text !== 'string') return text;
-    return text.replace(/Claude AI usage limit reached\|(\d{10,13})/g, (match, ts) => {
+
+    // Official format: "Claude AI usage limit reached|<timestamp>"
+    let result = text.replace(/Claude AI usage limit reached\|(\d{10,13})/g, (match, ts) => {
       let timestampMs = parseInt(ts, 10);
       if (!Number.isFinite(timestampMs)) return match;
       if (timestampMs < 1e12) timestampMs *= 1000;
@@ -80,6 +86,25 @@ export function formatUsageLimitText(text: string) {
 
       return `Claude usage limit reached. Your limit will reset at **${timeStr} ${tzHuman}** - ${dateReadable}`;
     });
+
+    // Proxy / non-official rate limit patterns — provide a friendly message
+    if (result === text) {
+      result = result.replace(
+        /(?:rate.?limit|too.?many.?requests|quota.?exceeded|429|throttl)/gi,
+        (match) => {
+          // Only wrap the first occurrence to avoid duplicating the hint
+          return match;
+        },
+      );
+      // If the text clearly indicates a rate limit but wasn't formatted above,
+      // add a prefix hint
+      if (/(?:rate.?limit|too.?many.?requests|quota.?exceeded)/i.test(result) &&
+          !result.includes('usage limit reached')) {
+        result = `⚠️ Rate limit: ${result}`;
+      }
+    }
+
+    return result;
   } catch {
     return text;
   }

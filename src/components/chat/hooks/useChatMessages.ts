@@ -44,11 +44,22 @@ export function normalizedToChatMessages(messages: NormalizedMessage[]): ChatMes
               taskStatus: taskNotifMatch[1]?.trim() || 'completed',
             });
           } else {
-            converted.push({
+            let userContent = unescapeWithMathProtection(decodeHtmlEntities(content));
+            // Strip "[Images provided at the following paths:]" block from displayed text
+            const imgMarkerIdx = userContent.indexOf('\n\n[Images provided at the following paths:]');
+            if (imgMarkerIdx !== -1) {
+              userContent = userContent.slice(0, imgMarkerIdx);
+            }
+            const userMsg: ChatMessage = {
               type: 'user',
-              content: unescapeWithMathProtection(decodeHtmlEntities(content)),
+              content: userContent,
               timestamp: msg.timestamp,
-            });
+            };
+            // Restore image data URLs if present
+            if (msg.images && msg.images.length > 0) {
+              userMsg.images = msg.images.map((url, i) => ({ data: url, name: `image_${i}` }));
+            }
+            converted.push(userMsg);
           }
         } else {
           let text = decodeHtmlEntities(content);
@@ -175,6 +186,16 @@ export function normalizedToChatMessages(messages: NormalizedMessage[]): ChatMes
         break;
 
       default:
+        // Fallback: show unrecognized message kinds as assistant text if they carry content,
+        // so proxy-specific or future message types are not silently lost.
+        if (msg.content) {
+          console.warn(`[useChatMessages] Unrecognized message kind: "${msg.kind}", rendering as text`);
+          converted.push({
+            type: 'assistant',
+            content: decodeHtmlEntities(msg.content),
+            timestamp: msg.timestamp,
+          });
+        }
         break;
     }
   }

@@ -13,17 +13,26 @@ export const INTERNAL_CONTENT_PREFIXES = Object.freeze([
   '<command-message>',
   '<command-args>',
   '<local-command-stdout>',
+  '<local-command-caveat>',
+  '<local-command-stderr>',
   '<system-reminder>',
+  '<system-prompt>',
+  '<tool-',
+  'Environment:',
   'Caveat:',
   'This session is being continued from a previous',
+  'Continue from where you left off',
   '[Request interrupted',
+  '[Previous conversation context',
 ]);
 
 /**
  * Check if user text content is internal/system that should be skipped.
+ * Trims leading whitespace before matching to handle proxy-injected padding.
  * @param {string} content
  * @returns {boolean}
  */
 export function isInternalContent(content) {
-  return INTERNAL_CONTENT_PREFIXES.some(prefix => content.startsWith(prefix));
+  const trimmed = content.trim();
+  return INTERNAL_CONTENT_PREFIXES.some(prefix => trimmed.startsWith(prefix));
 }

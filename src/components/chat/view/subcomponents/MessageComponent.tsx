@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import SessionProviderLogo from '../../../llm-logo-provider/SessionProviderLogo';
 import type {
@@ -52,6 +52,7 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, o
       (prevMessage.type === 'error'));
   const messageRef = useRef<HTMLDivElement | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
   const permissionSuggestion = getClaudePermissionSuggestion(message, provider);
   const [permissionGrantState, setPermissionGrantState] = useState<PermissionGrantState>('idle');
   const userCopyContent = String(message.content || '');
@@ -129,7 +130,7 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, o
                     src={img.data}
                     alt={img.name}
                     className="h-auto max-w-full cursor-pointer rounded-lg transition-opacity hover:opacity-90"
-                    onClick={() => window.open(img.data, '_blank')}
+                    onClick={() => setPreviewImage(img.data)}
                   />
                 ))}
               </div>
@@ -414,11 +415,26 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, o
                   const content = formattedMessageContent;
 
                   // Detect if content is pure JSON (starts with { or [)
+                  // Exclude proxy envelope objects that wrap actual text responses
                   const trimmedContent = content.trim();
                   if ((trimmedContent.startsWith('{') || trimmedContent.startsWith('[')) &&
                     (trimmedContent.endsWith('}') || trimmedContent.endsWith(']'))) {
                     try {
                       const parsed = JSON.parse(trimmedContent);
+                      // If the parsed JSON looks like a proxy envelope (has response/content/text/message field),
+                      // extract the actual text and render as markdown instead of raw JSON
+                      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                        const textValue = parsed.response || parsed.content || parsed.text || parsed.message || parsed.result;
+                        if (typeof textValue === 'string' && textValue.length > 0) {
+                          return message.type === 'assistant' ? (
+                            <Markdown className="prose prose-sm prose-gray max-w-none dark:prose-invert">
+                              {textValue}
+                            </Markdown>
+                          ) : (
+                            <div className="whitespace-pre-wrap break-words text-sm">{textValue}</div>
+                          );
+                        }
+                      }
                       const formatted = JSON.stringify(parsed, null, 2);
 
                       return (
@@ -465,6 +481,41 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, o
                 {!isGrouped && <span>{formattedTime}</span>}
               </div>
             )}
+          </div>
+        </div>
+      )}
+      {previewImage && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80"
+          onClick={() => setPreviewImage(null)}
+        >
+          <img
+            src={previewImage}
+            alt="Preview"
+            className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <div className="absolute right-4 top-4 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); window.open(previewImage, '_blank'); }}
+              className="rounded-full bg-black/50 p-2 text-white hover:bg-black/70"
+              title="Open in new tab"
+            >
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              onClick={() => setPreviewImage(null)}
+              className="rounded-full bg-black/50 p-2 text-white hover:bg-black/70"
+              title="Close"
+            >
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
         </div>
       )}

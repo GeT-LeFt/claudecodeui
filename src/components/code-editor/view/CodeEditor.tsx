@@ -1,7 +1,7 @@
 import { EditorView } from '@codemirror/view';
 import { unifiedMergeView } from '@codemirror/merge';
 import type { Extension } from '@codemirror/state';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useCodeEditorDocument } from '../hooks/useCodeEditorDocument';
 import { useCodeEditorSettings } from '../hooks/useCodeEditorSettings';
@@ -144,6 +144,38 @@ export default function CodeEditor({
     wordWrap,
   ]);
 
+  // Image file detection — hooks must be before any conditional returns
+  const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'ico', 'bmp'];
+  const fileExtension = file.name.split('.').pop()?.toLowerCase() || '';
+  const isImageFile = IMAGE_EXTENSIONS.includes(fileExtension);
+
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [imageError, setImageError] = useState(false);
+
+  useEffect(() => {
+    if (!isImageFile || !file.projectName) return;
+    let objectUrl: string | null = null;
+    const controller = new AbortController();
+
+    const loadImage = async () => {
+      try {
+        const { authenticatedFetch } = await import('../../../utils/api');
+        const response = await authenticatedFetch(
+          `/api/projects/${file.projectName}/files/content?path=${encodeURIComponent(file.path)}`,
+          { signal: controller.signal },
+        );
+        if (!response.ok) throw new Error('Failed to load');
+        const blob = await response.blob();
+        objectUrl = URL.createObjectURL(blob);
+        setImageUrl(objectUrl);
+      } catch (e: any) {
+        if (e?.name !== 'AbortError') setImageError(true);
+      }
+    };
+    loadImage();
+    return () => { controller.abort(); if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [isImageFile, file.projectName, file.path]);
+
   useEditorKeyboardShortcuts({
     onSave: handleSave,
     onClose,
@@ -157,6 +189,68 @@ export default function CodeEditor({
         isSidebar={isSidebar}
         loadingText={t('loading', { fileName: file.name })}
       />
+    );
+  }
+
+  if (isImageFile) {
+    const imageContent = (
+      <div className="flex h-full w-full flex-col items-center justify-center bg-gray-50 p-4 dark:bg-gray-900">
+        {imageUrl ? (
+          <img src={imageUrl} alt={file.name} className="max-h-[70vh] max-w-full rounded-lg object-contain shadow-md" />
+        ) : imageError ? (
+          <p className="text-sm text-gray-500 dark:text-gray-400">Unable to load image</p>
+        ) : (
+          <p className="text-sm text-gray-500 dark:text-gray-400">Loading image...</p>
+        )}
+      </div>
+    );
+
+    if (isSidebar) {
+      return (
+        <div className="flex h-full w-full flex-col bg-background">
+          <div className="flex flex-shrink-0 items-center justify-between border-b border-border px-3 py-1.5">
+            <h3 className="truncate text-sm font-medium text-gray-900 dark:text-white">{file.name}</h3>
+            <div className="flex items-center gap-1">
+              {imageUrl && (
+                <button type="button" onClick={() => window.open(imageUrl, '_blank')} className="rounded-md p-1.5 text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800" title="Open in new tab">
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                </button>
+              )}
+              <button type="button" onClick={onClose} className="rounded-md p-1.5 text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800" title="Close">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+          </div>
+          {imageContent}
+          <div className="border-t bg-gray-50 px-3 py-2 dark:bg-gray-800">
+            <p className="truncate text-xs text-gray-500 dark:text-gray-400">{file.path}</p>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 md:p-4">
+        <div className="flex h-full w-full flex-col bg-background shadow-2xl md:max-h-[80vh] md:max-w-4xl md:rounded-lg">
+          <div className="flex flex-shrink-0 items-center justify-between border-b border-border px-3 py-1.5">
+            <h3 className="truncate text-sm font-medium text-gray-900 dark:text-white">{file.name}</h3>
+            <div className="flex items-center gap-1">
+              {imageUrl && (
+                <button type="button" onClick={() => window.open(imageUrl, '_blank')} className="rounded-md p-1.5 text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800" title="Open in new tab">
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                </button>
+              )}
+              <button type="button" onClick={onClose} className="rounded-md p-1.5 text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800" title="Close">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+          </div>
+          {imageContent}
+          <div className="border-t bg-gray-50 px-3 py-2 dark:bg-gray-800">
+            <p className="truncate text-xs text-gray-500 dark:text-gray-400">{file.path}</p>
+          </div>
+        </div>
+      </div>
     );
   }
 

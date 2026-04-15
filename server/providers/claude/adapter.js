@@ -5,9 +5,63 @@
  * @module adapters/claude
  */
 
+import { readFile } from 'node:fs/promises';
 import { getSessionMessages } from '../../projects.js';
 import { createNormalizedMessage, generateMessageId } from '../types.js';
 import { isInternalContent } from '../utils.js';
+
+/**
+ * Extract image file paths from user message text that contains
+ * "[Images provided at the following paths:]" markers.
+ * @param {string} text
+ * @returns {string[]} array of absolute file paths
+ */
+function extractImagePaths(text) {
+  const marker = '[Images provided at the following paths:]';
+  const idx = text.indexOf(marker);
+  if (idx === -1) return [];
+  const pathSection = text.slice(idx + marker.length);
+  const paths = [];
+  for (const line of pathSection.split('\n')) {
+    const match = line.match(/^\d+\.\s+(.+)$/);
+    if (match) paths.push(match[1].trim());
+  }
+  return paths;
+}
+
+/**
+ * Strip the "[Images provided at the following paths:]" block from user text.
+ * @param {string} text
+ * @returns {string}
+ */
+function stripImagePathsFromText(text) {
+  const marker = '\n\n[Images provided at the following paths:]';
+  const idx = text.indexOf(marker);
+  if (idx === -1) return text;
+  return text.slice(0, idx);
+}
+
+/**
+ * Read image files and convert to base64 data URLs.
+ * Silently skips files that no longer exist.
+ * @param {string[]} paths
+ * @returns {Promise<string[]>} array of data URLs
+ */
+async function readImageFiles(paths) {
+  const results = [];
+  for (const p of paths) {
+    try {
+      const buf = await readFile(p);
+      const ext = p.split('.').pop()?.toLowerCase() || 'png';
+      const mimeMap = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml' };
+      const mime = mimeMap[ext] || 'image/png';
+      results.push(`data:${mime};base64,${buf.toString('base64')}`);
+    } catch {
+      // File no longer exists — skip
+    }
+  }
+  return results;
+}
 
 const PROVIDER = 'claude';
 
@@ -21,8 +75,16 @@ const PROVIDER = 'claude';
  */
 export function normalizeMessage(raw, sessionId) {
   // ── Streaming events (realtime) ──────────────────────────────────────────
-  if (raw.type === 'content_block_delta' && raw.delta?.text) {
-    return [createNormalizedMessage({ kind: 'stream_delta', content: raw.delta.text, sessionId, provider: PROVIDER })];
+  if (raw.type === 'content_block_delta') {
+    if (raw.delta?.text) {
+      return [createNormalizedMessage({ kind: 'stream_delta', content: raw.delta.text, sessionId, provider: PROVIDER })];
+    }
+    // Thinking delta (extended thinking streaming)
+    if (raw.delta?.thinking) {
+      return [createNormalizedMessage({ kind: 'stream_delta', content: raw.delta.thinking, sessionId, provider: PROVIDER, role: 'thinking' })];
+    }
+    // input_json_delta — skip, tool_use will arrive as a complete event
+    return [];
   }
   if (raw.type === 'content_block_stop') {
     return [createNormalizedMessage({ kind: 'stream_end', sessionId, provider: PROVIDER })];
@@ -39,6 +101,16 @@ export function normalizeMessage(raw, sessionId) {
       // Handle tool_result parts
       for (const part of raw.message.content) {
         if (part.type === 'tool_result') {
+          // Handle array content in tool_result (standard Anthropic format with images/text blocks)
+          let resultContent;
+          if (Array.isArray(part.content)) {
+            resultContent = part.content
+              .filter(block => block.type === 'text')
+              .map(block => block.text)
+              .join('\n') || JSON.stringify(part.content);
+          } else {
+            resultContent = typeof part.content === 'string' ? part.content : JSON.stringify(part.content);
+          }
           messages.push(createNormalizedMessage({
             id: `${baseId}_tr_${part.tool_use_id}`,
             sessionId,
@@ -46,7 +118,7 @@ export function normalizeMessage(raw, sessionId) {
             provider: PROVIDER,
             kind: 'tool_result',
             toolId: part.tool_use_id,
-            content: typeof part.content === 'string' ? part.content : JSON.stringify(part.content),
+            content: resultContent,
             isError: Boolean(part.is_error),
             subagentTools: raw.subagentTools,
             toolUseResult: raw.toolUseResult,
@@ -181,6 +253,37 @@ export function normalizeMessage(raw, sessionId) {
             kind: 'thinking',
             content: part.thinking,
           }));
+        } else if (part.type === 'redacted_thinking') {
+          messages.push(createNormalizedMessage({
+            id: `${baseId}_${partIndex}`,
+            sessionId,
+            timestamp: ts,
+            provider: PROVIDER,
+            kind: 'thinking',
+            content: '[Thinking content redacted]',
+          }));
+        } else if (part.type === 'server_tool_use') {
+          messages.push(createNormalizedMessage({
+            id: `${baseId}_${partIndex}`,
+            sessionId,
+            timestamp: ts,
+            provider: PROVIDER,
+            kind: 'tool_use',
+            toolName: part.name || 'server_tool',
+            toolInput: part.input,
+            toolId: part.id,
+          }));
+        } else if (part.type === 'server_tool_result') {
+          messages.push(createNormalizedMessage({
+            id: `${baseId}_${partIndex}`,
+            sessionId,
+            timestamp: ts,
+            provider: PROVIDER,
+            kind: 'tool_result',
+            toolId: part.tool_use_id || '',
+            content: typeof part.content === 'string' ? part.content : JSON.stringify(part.content),
+            isError: false,
+          }));
         }
         partIndex++;
       }
@@ -264,6 +367,21 @@ export const claudeAdapter = {
           toolUseResult: tr.toolUseResult,
         };
         msg.subagentTools = tr.subagentTools;
+      }
+    }
+
+    // Extract image data URLs from user messages that reference temp image files
+    for (const msg of normalized) {
+      if (msg.kind === 'text' && msg.role === 'user' && msg.content) {
+        const imagePaths = extractImagePaths(msg.content);
+        if (imagePaths.length > 0) {
+          const dataUrls = await readImageFiles(imagePaths);
+          if (dataUrls.length > 0) {
+            msg.images = dataUrls;
+          }
+          // Strip the image paths block from the displayed text
+          msg.content = stripImagePathsFromText(msg.content);
+        }
       }
     }
 

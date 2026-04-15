@@ -106,12 +106,22 @@ function createEmptySlot(): SessionSlot {
  * Compute merged messages: server + realtime, deduped by id.
  * Server messages take priority (they're the persisted source of truth).
  * Realtime messages that aren't yet in server stay (in-flight streaming).
+ * Falls back to content+role+kind matching when IDs differ (proxy compat).
  */
 function computeMerged(server: NormalizedMessage[], realtime: NormalizedMessage[]): NormalizedMessage[] {
   if (realtime.length === 0) return server;
   if (server.length === 0) return realtime;
   const serverIds = new Set(server.map(m => m.id));
-  const extra = realtime.filter(m => !serverIds.has(m.id));
+  // Build a fuzzy signature set for fallback dedup when IDs don't match
+  const serverSignatures = new Set(
+    server.map(m => `${m.kind}|${m.role || ''}|${(m.content || '').slice(0, 100)}`),
+  );
+  const extra = realtime.filter(m => {
+    if (serverIds.has(m.id)) return false;
+    // Fuzzy dedup: skip realtime messages whose content already appears in server
+    const sig = `${m.kind}|${m.role || ''}|${(m.content || '').slice(0, 100)}`;
+    return !serverSignatures.has(sig);
+  });
   if (extra.length === 0) return server;
   return [...server, ...extra];
 }

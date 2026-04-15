@@ -76,12 +76,19 @@ function chatMessageToNormalized(
   if (msg.type === 'error') {
     return { ...base, kind: 'error', content: msg.content || '' } as NormalizedMessage;
   }
-  return {
+  const normalized = {
     ...base,
     kind: 'text',
     role: msg.type === 'user' ? 'user' : 'assistant',
     content: msg.content || '',
   } as NormalizedMessage;
+
+  // Preserve image data URLs for user messages
+  if (msg.type === 'user' && msg.images && msg.images.length > 0) {
+    normalized.images = msg.images.map(img => img.data);
+  }
+
+  return normalized;
 }
 
 /* ------------------------------------------------------------------ */

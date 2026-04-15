@@ -372,11 +372,19 @@ async function handleImages(command, images, cwd) {
 
 /**
  * Cleans up temporary image files
+ * Skips cleanup for images stored under .tmp/images/ (project directory)
+ * so they remain available for chat history rendering.
  * @param {Array<string>} tempImagePaths - Array of temp file paths to delete
  * @param {string} tempDir - Temp directory to remove
  */
 async function cleanupTempFiles(tempImagePaths, tempDir) {
   if (!tempImagePaths || tempImagePaths.length === 0) {
+    return;
+  }
+
+  // Keep images under .tmp/images/ in project directory for history rendering
+  const isProjectImages = tempDir && tempDir.includes(path.join('.tmp', 'images'));
+  if (isProjectImages) {
     return;
   }
 
@@ -651,6 +659,10 @@ async function queryClaudeSDK(command, options = {}, ws) {
       // Use adapter to normalize SDK events into NormalizedMessage[]
       const normalized = claudeAdapter.normalizeMessage(transformedMessage, sid);
       for (const msg of normalized) {
+        // Skip user text messages — the frontend already shows them via addMessage()
+        // to avoid duplicate user bubbles in the chat.
+        if (msg.kind === 'text' && msg.role === 'user') continue;
+
         // Preserve parentToolUseId from SDK wrapper for subagent tool grouping
         if (transformedMessage.parentToolUseId && !msg.parentToolUseId) {
           msg.parentToolUseId = transformedMessage.parentToolUseId;
@@ -668,6 +680,21 @@ async function queryClaudeSDK(command, options = {}, ws) {
         if (tokenBudgetData) {
           ws.send(createNormalizedMessage({ kind: 'status', text: 'token_budget', tokenBudget: tokenBudgetData, sessionId: capturedSessionId || sessionId || null, provider: 'claude' }));
         }
+      }
+    }
+
+    // Fallback: if proxy never sent session_id, use the user-provided sessionId
+    // and emit session_created so the frontend can track it
+    if (!capturedSessionId && sessionId) {
+      capturedSessionId = sessionId;
+      addSession(capturedSessionId, queryInstance, tempImagePaths, tempDir, ws);
+    } else if (!capturedSessionId && !sessionId) {
+      // Brand new session but proxy never assigned an ID — generate one
+      capturedSessionId = `proxy_${Date.now()}`;
+      addSession(capturedSessionId, queryInstance, tempImagePaths, tempDir, ws);
+      if (!sessionCreatedSent) {
+        sessionCreatedSent = true;
+        ws.send(createNormalizedMessage({ kind: 'session_created', newSessionId: capturedSessionId, sessionId: capturedSessionId, provider: 'claude' }));
       }
     }
 
@@ -701,8 +728,26 @@ async function queryClaudeSDK(command, options = {}, ws) {
     // Clean up temporary image files on error
     await cleanupTempFiles(tempImagePaths, tempDir);
 
+    // Extract error message with fallback chain for non-standard proxy errors
+    let errorContent = error?.message
+      || error?.error?.message
+      || error?.statusText
+      || (typeof error === 'string' ? error : null);
+    if (!errorContent) {
+      try { errorContent = JSON.stringify(error); } catch { errorContent = 'Unknown error'; }
+    }
+    // Friendly hints for common HTTP status codes from proxies
+    const status = error?.status || error?.statusCode || error?.error?.status;
+    if (status === 429) {
+      errorContent = `Rate limit exceeded (429): ${errorContent}`;
+    } else if (status === 502 || status === 503) {
+      errorContent = `Proxy service unavailable (${status}): ${errorContent}`;
+    } else if (status === 401 || status === 403) {
+      errorContent = `Authentication failed (${status}): ${errorContent}`;
+    }
+
     // Send error to WebSocket
-    ws.send(createNormalizedMessage({ kind: 'error', content: error.message, sessionId: capturedSessionId || sessionId || null, provider: 'claude' }));
+    ws.send(createNormalizedMessage({ kind: 'error', content: errorContent, sessionId: capturedSessionId || sessionId || null, provider: 'claude' }));
     notifyRunFailed({
       userId: ws?.userId || null,
       provider: 'claude',

@@ -144,15 +144,64 @@ const markdownComponents = {
 };
 
 export function Markdown({ children, className }: MarkdownProps) {
-  const content = normalizeInlineCodeFences(String(children ?? ''));
+  const rawContent = normalizeInlineCodeFences(String(children ?? ''));
+
+  // Split content on <output_image>...</output_image> tags and render images inline
+  const outputImageRegex = /<output_image>([\s\S]*?)<\/output_image>/g;
+  const hasOutputImage = outputImageRegex.test(rawContent);
+
   const remarkPlugins = useMemo(() => [remarkGfm, remarkMath], []);
   const rehypePlugins = useMemo(() => [rehypeKatex], []);
 
+  if (!hasOutputImage) {
+    return (
+      <div className={className}>
+        <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} components={markdownComponents as any}>
+          {rawContent}
+        </ReactMarkdown>
+      </div>
+    );
+  }
+
+  // Split into text parts and image parts
+  const parts: { type: 'text' | 'image'; content: string }[] = [];
+  let lastIndex = 0;
+  const regex = /<output_image>([\s\S]*?)<\/output_image>/g;
+  let match;
+  while ((match = regex.exec(rawContent)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push({ type: 'text', content: rawContent.slice(lastIndex, match.index) });
+    }
+    parts.push({ type: 'image', content: match[1].trim() });
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < rawContent.length) {
+    parts.push({ type: 'text', content: rawContent.slice(lastIndex) });
+  }
+
   return (
     <div className={className}>
-      <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} components={markdownComponents as any}>
-        {content}
-      </ReactMarkdown>
+      {parts.map((part, i) => {
+        if (part.type === 'image') {
+          // output_image content is typically a description, not actual image data
+          // Show as a placeholder indicating an image was read
+          return (
+            <div key={i} className="my-2 flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/50">
+              <svg className="h-5 w-5 flex-shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <span className="text-xs text-gray-500 dark:text-gray-400">[Image]</span>
+            </div>
+          );
+        }
+        const text = part.content.trim();
+        if (!text) return null;
+        return (
+          <ReactMarkdown key={i} remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} components={markdownComponents as any}>
+            {text}
+          </ReactMarkdown>
+        );
+      })}
     </div>
   );
 }

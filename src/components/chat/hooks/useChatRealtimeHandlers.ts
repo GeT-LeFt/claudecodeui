@@ -207,8 +207,10 @@ export function useChatRealtimeHandlers({
         streamTimerRef.current = null;
       }
       if (sid) {
-        if (accumulatedStreamRef.current) {
-          sessionStore.updateStreaming(sid, accumulatedStreamRef.current, provider);
+        // Use msg.content as fallback when no stream_delta was received
+        const finalContent = accumulatedStreamRef.current || (msg as any).content || '';
+        if (finalContent) {
+          sessionStore.updateStreaming(sid, finalContent, provider);
         }
         sessionStore.finalizeStreaming(sid);
       }
@@ -218,7 +220,9 @@ export function useChatRealtimeHandlers({
     }
 
     // --- All other messages: route to store ---
-    if (sid) {
+    // Skip user text messages — the composer already added them via addMessage()
+    // to avoid duplicate user bubbles in the chat.
+    if (sid && !(msg.kind === 'text' && msg.role === 'user')) {
       sessionStore.appendRealtime(sid, msg as NormalizedMessage);
     }
 
