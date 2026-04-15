@@ -146,10 +146,20 @@ export default function FileTree({ selectedProject, onFileOpen }: FileTreeProps)
         onSearchQueryChange={setSearchQuery}
         onNewFile={() => operations.handleStartCreate('', 'file')}
         onNewFolder={() => operations.handleStartCreate('', 'directory')}
+        onUpload={upload.handleClickUpload}
         onRefresh={refreshFiles}
         onCollapseAll={collapseAll}
         loading={loading}
         operationLoading={operations.operationLoading}
+      />
+
+      {/* Hidden file input for click-to-upload */}
+      <input
+        ref={upload.fileInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={upload.handleFileInputChange}
       />
 
       {viewMode === 'detailed' && filteredFiles.length > 0 && <FileTreeDetailedColumns />}

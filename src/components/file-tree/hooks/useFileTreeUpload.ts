@@ -66,6 +66,48 @@ export const useFileTreeUpload = ({
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [operationLoading, setOperationLoading] = useState(false);
   const treeRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Shared upload function used by both drag-drop and click upload
+  const uploadFiles = useCallback(async (files: File[], targetPath: string) => {
+    if (files.length === 0 || !selectedProject) return;
+
+    setOperationLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append('targetPath', targetPath);
+
+      const relativePaths: string[] = [];
+      files.forEach((file) => {
+        const cleanFile = new File([file], file.name.split('/').pop()!, {
+          type: file.type,
+          lastModified: file.lastModified
+        });
+        formData.append('files', cleanFile);
+        relativePaths.push(file.name);
+      });
+
+      formData.append('relativePaths', JSON.stringify(relativePaths));
+
+      const response = await api.post(
+        `/projects/${encodeURIComponent(selectedProject.name)}/files/upload`,
+        formData
+      );
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Upload failed');
+      }
+
+      showToast(`Uploaded ${files.length} file(s)`, 'success');
+      onRefresh();
+    } catch (err) {
+      console.error('Upload error:', err);
+      showToast(err instanceof Error ? err.message : 'Upload failed', 'error');
+    } finally {
+      setOperationLoading(false);
+    }
+  }, [selectedProject, onRefresh, showToast]);
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -94,7 +136,6 @@ export const useFileTreeUpload = ({
     setIsDragOver(false);
 
     const targetPath = dropTarget || '';
-    setOperationLoading(true);
 
     try {
       const files: File[] = [];
@@ -113,7 +154,6 @@ export const useFileTreeUpload = ({
                 });
                 files.push(file);
               } else if (entry.isDirectory) {
-                // Pass the directory name as basePath so files include the folder path
                 const dirFiles = await readAllDirectoryEntries(entry as FileSystemDirectoryEntry, entry.name);
                 files.push(...dirFiles);
               }
@@ -121,61 +161,17 @@ export const useFileTreeUpload = ({
           }
         }
       } else {
-        // Fallback for browsers that don't support webkitGetAsEntry
         const fileList = e.dataTransfer.files;
         for (const file of Array.from(fileList)) {
           files.push(file);
         }
       }
 
-      if (files.length === 0) {
-        setOperationLoading(false);
-        setDropTarget(null);
-        return;
-      }
-
-      const formData = new FormData();
-      formData.append('targetPath', targetPath);
-
-      // Store relative paths separately since FormData strips path info from File.name
-      const relativePaths: string[] = [];
-      files.forEach((file) => {
-        // Create a new file with just the filename (without path) for FormData
-        // but store the relative path separately
-        const cleanFile = new File([file], file.name.split('/').pop()!, {
-          type: file.type,
-          lastModified: file.lastModified
-        });
-        formData.append('files', cleanFile);
-        relativePaths.push(file.name); // Keep the full relative path
-      });
-
-      // Send relative paths as a JSON array
-      formData.append('relativePaths', JSON.stringify(relativePaths));
-
-      const response = await api.post(
-        `/projects/${encodeURIComponent(selectedProject!.name)}/files/upload`,
-        formData
-      );
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Upload failed');
-      }
-
-      showToast(
-        `Uploaded ${files.length} file(s)`,
-        'success'
-      );
-      onRefresh();
-    } catch (err) {
-      console.error('Upload error:', err);
-      showToast(err instanceof Error ? err.message : 'Upload failed', 'error');
+      await uploadFiles(files, targetPath);
     } finally {
-      setOperationLoading(false);
       setDropTarget(null);
     }
-  }, [dropTarget, selectedProject, onRefresh, showToast]);
+  }, [dropTarget, uploadFiles]);
 
   const handleItemDragOver = useCallback((e: React.DragEvent, itemPath: string) => {
     e.preventDefault();
@@ -189,17 +185,39 @@ export const useFileTreeUpload = ({
     setDropTarget(itemPath);
   }, []);
 
+  // Click-to-upload: open file dialog
+  const handleClickUpload = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  // Handle files selected via file dialog
+  const handleFileInputChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const fileList = e.target.files;
+    if (!fileList || fileList.length === 0) return;
+
+    const files = Array.from(fileList);
+    await uploadFiles(files, '');
+
+    // Reset input so the same file can be selected again
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }, [uploadFiles]);
+
   return {
     isDragOver,
     dropTarget,
     operationLoading,
     treeRef,
+    fileInputRef,
     handleDragEnter,
     handleDragOver,
     handleDragLeave,
     handleDrop,
     handleItemDragOver,
     handleItemDrop,
+    handleClickUpload,
+    handleFileInputChange,
     setDropTarget,
   };
 };
