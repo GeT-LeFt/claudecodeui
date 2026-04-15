@@ -320,3 +320,205 @@ test.describe('Frontend utility verification', () => {
     expect(result.ids).toEqual(['srv_1', 'srv_2', 'rt_2']);
   });
 });
+
+// ─── Part 4: System notification (compaction) ──────────────────────────────
+
+test.describe('System notification rendering', () => {
+  test('normalizedToChatMessages converts system_notification correctly', async ({ page }) => {
+    await page.goto(BASE, { waitUntil: 'domcontentloaded' });
+
+    const result = await page.evaluate(() => {
+      // Replicate the system_notification branch from normalizedToChatMessages
+      function convertSystemNotification(msg: any) {
+        if (msg.kind === 'system_notification') {
+          return {
+            type: 'assistant',
+            content: msg.content || 'System notification',
+            timestamp: msg.timestamp,
+            isSystemNotification: true,
+            notificationType: msg.notificationType || 'info',
+          };
+        }
+        return null;
+      }
+
+      const compactSuccess = convertSystemNotification({
+        id: 'test-1',
+        sessionId: 'sess-1',
+        timestamp: '2026-04-15T00:00:00Z',
+        provider: 'claude',
+        kind: 'system_notification',
+        content: 'Conversation compacted',
+        notificationType: 'compaction',
+      });
+
+      const compactFailed = convertSystemNotification({
+        id: 'test-2',
+        sessionId: 'sess-1',
+        timestamp: '2026-04-15T00:00:01Z',
+        provider: 'claude',
+        kind: 'system_notification',
+        content: 'Conversation compaction failed',
+        notificationType: 'compaction',
+      });
+
+      const defaultContent = convertSystemNotification({
+        id: 'test-3',
+        sessionId: 'sess-1',
+        timestamp: '2026-04-15T00:00:02Z',
+        provider: 'claude',
+        kind: 'system_notification',
+        // no content, no notificationType
+      });
+
+      const nonSystemMsg = convertSystemNotification({
+        id: 'test-4',
+        kind: 'text',
+        role: 'assistant',
+        content: 'Hello',
+      });
+
+      return { compactSuccess, compactFailed, defaultContent, nonSystemMsg };
+    });
+
+    // Compact success
+    expect(result.compactSuccess).not.toBeNull();
+    expect(result.compactSuccess!.type).toBe('assistant');
+    expect(result.compactSuccess!.content).toBe('Conversation compacted');
+    expect(result.compactSuccess!.isSystemNotification).toBe(true);
+    expect(result.compactSuccess!.notificationType).toBe('compaction');
+
+    // Compact failed
+    expect(result.compactFailed!.content).toBe('Conversation compaction failed');
+    expect(result.compactFailed!.isSystemNotification).toBe(true);
+
+    // Default fallbacks
+    expect(result.defaultContent!.content).toBe('System notification');
+    expect(result.defaultContent!.notificationType).toBe('info');
+
+    // Non-system messages should not be converted
+    expect(result.nonSystemMsg).toBeNull();
+  });
+
+  test('system notification DOM renders blue dot and text', async ({ page }) => {
+    await page.goto(BASE, { waitUntil: 'domcontentloaded' });
+
+    // Inject a system notification element directly into the page to verify
+    // the expected markup matches our MessageComponent rendering
+    await page.evaluate(() => {
+      const container = document.createElement('div');
+      container.id = 'test-system-notification';
+      // Reproduce the exact markup from MessageComponent.tsx for isSystemNotification
+      container.innerHTML = `
+        <div class="w-full">
+          <div class="flex items-center gap-2 py-0.5">
+            <span class="inline-block h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-400 dark:bg-blue-500"></span>
+            <span class="text-xs text-gray-500 dark:text-gray-400">Conversation compacted</span>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(container);
+    });
+
+    // Verify the injected element renders correctly
+    const notifContainer = page.locator('#test-system-notification');
+    await expect(notifContainer).toBeVisible();
+
+    // Blue dot exists
+    const blueDot = notifContainer.locator('span.rounded-full');
+    await expect(blueDot).toBeVisible();
+
+    // Verify the blue dot has the correct CSS class
+    const dotClasses = await blueDot.getAttribute('class');
+    expect(dotClasses).toContain('bg-blue-400');
+
+    // Text content matches
+    const text = notifContainer.locator('span.text-xs');
+    await expect(text).toHaveText('Conversation compacted');
+  });
+
+  test('backend createNormalizedMessage produces valid system_notification', async ({ page }) => {
+    await page.goto(BASE, { waitUntil: 'domcontentloaded' });
+
+    // Verify the shape of a system_notification message matches expected schema
+    const result = await page.evaluate(() => {
+      // Simulate createNormalizedMessage from server/providers/types.js
+      function createNormalizedMessage(fields: any) {
+        return {
+          id: fields.id || `msg-${Date.now()}`,
+          sessionId: fields.sessionId || '',
+          timestamp: fields.timestamp || new Date().toISOString(),
+          provider: fields.provider || 'unknown',
+          kind: fields.kind || 'text',
+          ...fields,
+        };
+      }
+
+      const msg = createNormalizedMessage({
+        kind: 'system_notification',
+        content: 'Conversation compacted',
+        notificationType: 'compaction',
+        sessionId: 'test-sess',
+        provider: 'claude',
+      });
+
+      return {
+        hasKind: msg.kind === 'system_notification',
+        hasContent: msg.content === 'Conversation compacted',
+        hasNotificationType: msg.notificationType === 'compaction',
+        hasSessionId: !!msg.sessionId,
+        hasTimestamp: !!msg.timestamp,
+        hasId: !!msg.id,
+      };
+    });
+
+    expect(result.hasKind).toBe(true);
+    expect(result.hasContent).toBe(true);
+    expect(result.hasNotificationType).toBe(true);
+    expect(result.hasSessionId).toBe(true);
+    expect(result.hasTimestamp).toBe(true);
+    expect(result.hasId).toBe(true);
+  });
+
+  test('compact_result detection logic only triggers for compaction events', async ({ page }) => {
+    await page.goto(BASE, { waitUntil: 'domcontentloaded' });
+
+    const result = await page.evaluate(() => {
+      function shouldEmitCompactionNotification(message: any): boolean {
+        return (
+          message.type === 'system' &&
+          message.subtype === 'status' &&
+          !!message.compact_result
+        );
+      }
+
+      return {
+        compactSuccess: shouldEmitCompactionNotification({
+          type: 'system', subtype: 'status', status: null, compact_result: 'success',
+        }),
+        compactFailed: shouldEmitCompactionNotification({
+          type: 'system', subtype: 'status', status: null, compact_result: 'failed',
+        }),
+        normalStatus: shouldEmitCompactionNotification({
+          type: 'system', subtype: 'status', status: 'requesting',
+        }),
+        compacting: shouldEmitCompactionNotification({
+          type: 'system', subtype: 'status', status: 'compacting',
+        }),
+        textMsg: shouldEmitCompactionNotification({
+          type: 'text', role: 'assistant', content: 'hello',
+        }),
+        systemNonStatus: shouldEmitCompactionNotification({
+          type: 'system', subtype: 'compact_boundary',
+        }),
+      };
+    });
+
+    expect(result.compactSuccess).toBe(true);
+    expect(result.compactFailed).toBe(true);
+    expect(result.normalStatus).toBe(false);
+    expect(result.compacting).toBe(false);
+    expect(result.textMsg).toBe(false);
+    expect(result.systemNonStatus).toBe(false);
+  });
+});

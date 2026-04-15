@@ -19,7 +19,8 @@
 /**
  * @typedef {'text' | 'tool_use' | 'tool_result' | 'thinking' | 'stream_delta' | 'stream_end'
  *   | 'error' | 'complete' | 'status' | 'permission_request' | 'permission_cancelled'
- *   | 'session_created' | 'interactive_prompt' | 'task_notification'} MessageKind
+ *   | 'session_created' | 'interactive_prompt' | 'task_notification'
+ *   | 'system_notification'} MessageKind
  */
 
 // ─── NormalizedMessage ───────────────────────────────────────────────────────
@@ -47,6 +48,7 @@
  * - session_created:      newSessionId
  * - interactive_prompt:   content
  * - task_notification:    status, summary
+ * - system_notification:  content, notificationType
  */
 
 // ─── Fetch History ───────────────────────────────────────────────────────────

@@ -96,7 +96,8 @@
     "tasks": "Tasks",
     "notifications": "Notifications",
     "plugins": "Plugins",
-    "about": "About"
+    "about": "About",
+    "backends": "Backends"
   },
   "notifications": {
     "title": "Notifications",
@@ -486,5 +487,29 @@
     "installAriaLabel": "Plugin git repository URL",
     "tab": "tab",
     "runningStatus": "running"
+  },
+  "backends": {
+    "title": "Backends",
+    "description": "Manage backend server connections. Switch between local and remote CloudCLI instances.",
+    "name": "Name",
+    "url": "URL",
+    "urlPlaceholder": "https://example.com:8080",
+    "namePlaceholder": "e.g. Cloud Server",
+    "addBackend": "Add Backend",
+    "removeBackend": "Remove",
+    "testConnection": "Test",
+    "testing": "Testing...",
+    "connected": "Connected",
+    "disconnected": "Disconnected",
+    "connectionFailed": "Connection failed",
+    "connectionSuccess": "Connection successful",
+    "default": "Default",
+    "active": "Active",
+    "switchTo": "Switch to",
+    "cannotRemoveDefault": "Cannot remove default backend",
+    "confirmRemove": "Remove this backend?",
+    "noUrl": "Please enter a URL",
+    "noName": "Please enter a name",
+    "manageBackends": "Manage Backends..."
   }
 }

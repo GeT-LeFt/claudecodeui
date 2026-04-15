@@ -159,6 +159,16 @@ export function normalizedToChatMessages(messages: NormalizedMessage[]): ChatMes
         });
         break;
 
+      case 'system_notification':
+        converted.push({
+          type: 'assistant',
+          content: msg.content || 'System notification',
+          timestamp: msg.timestamp,
+          isSystemNotification: true,
+          notificationType: msg.notificationType || 'info',
+        });
+        break;
+
       case 'stream_delta':
         if (msg.content) {
           converted.push({

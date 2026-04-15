@@ -2,6 +2,7 @@ import { Settings, ArrowUpCircle, Bug } from 'lucide-react';
 import type { TFunction } from 'i18next';
 import { IS_PLATFORM } from '../../../../constants/config';
 import type { ReleaseInfo } from '../../../../types/sharedTypes';
+import BackendSwitcher from './BackendSwitcher';
 
 const GITHUB_ISSUES_URL = 'https://github.com/siteboon/claudecodeui/issues/new';
 const GITHUB_REPO_URL = 'https://github.com/siteboon/claudecodeui';
@@ -88,6 +89,11 @@ export default function SidebarFooter({
       {/* Community + Settings */}
       <div className="nav-divider" />
 
+      {/* Backend Switcher (Desktop) */}
+      <div className="hidden px-2 pt-1.5 md:block">
+        <BackendSwitcher />
+      </div>
+
       {/* Desktop Report Issue */}
       <div className="hidden px-2 pt-1.5 md:block">
         <a
@@ -138,6 +144,11 @@ export default function SidebarFooter({
           </a>
         </div>
       )}
+
+      {/* Mobile Backend Switcher */}
+      <div className="px-3 pt-3 md:hidden">
+        <BackendSwitcher />
+      </div>
 
       {/* Mobile Report Issue */}
       <div className="px-3 pt-3 md:hidden">

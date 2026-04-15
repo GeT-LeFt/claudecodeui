@@ -1,5 +1,8 @@
 export const AUTH_TOKEN_STORAGE_KEY = 'auth-token';
 
+export const getBackendTokenKey = (backendUrl: string): string =>
+  backendUrl ? `${AUTH_TOKEN_STORAGE_KEY}::${backendUrl}` : AUTH_TOKEN_STORAGE_KEY;
+
 export const AUTH_ERROR_MESSAGES = {
   authStatusCheckFailed: 'Failed to check authentication status',
   loginFailed: 'Login failed',

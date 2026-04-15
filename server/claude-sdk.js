@@ -652,6 +652,19 @@ async function queryClaudeSDK(command, options = {}, ws) {
         // session_id already captured
       }
 
+      // Handle SDK system messages (e.g., compaction status) before adapter normalization
+      if (message.type === 'system' && message.subtype === 'status' && message.compact_result) {
+        const sid = capturedSessionId || sessionId || null;
+        ws.send(createNormalizedMessage({
+          kind: 'system_notification',
+          content: message.compact_result === 'success' ? 'Conversation compacted' : 'Conversation compaction failed',
+          notificationType: 'compaction',
+          sessionId: sid,
+          provider: 'claude'
+        }));
+        continue;
+      }
+
       // Transform and normalize message via adapter
       const transformedMessage = transformMessage(message);
       const sid = capturedSessionId || sessionId || null;

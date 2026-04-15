@@ -1,20 +1,32 @@
 import { IS_PLATFORM } from '../../../constants/config';
 import type { ShellIncomingMessage, ShellOutgoingMessage } from '../types/types';
 
-export function getShellWebSocketUrl(): string | null {
+export function getShellWebSocketUrl(backendUrl?: string, tokenKey?: string): string | null {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 
-  if (IS_PLATFORM) {
-    return `${protocol}//${window.location.host}/shell`;
+  let host: string;
+  if (backendUrl) {
+    try {
+      const parsed = new URL(backendUrl);
+      host = parsed.host;
+    } catch {
+      host = window.location.host;
+    }
+  } else {
+    host = window.location.host;
   }
 
-  const token = localStorage.getItem('auth-token');
+  if (IS_PLATFORM) {
+    return `${protocol}//${host}/shell`;
+  }
+
+  const token = localStorage.getItem(tokenKey || 'auth-token');
   if (!token) {
     console.error('No authentication token found for Shell WebSocket connection');
     return null;
   }
 
-  return `${protocol}//${window.location.host}/shell?token=${encodeURIComponent(token)}`;
+  return `${protocol}//${host}/shell?token=${encodeURIComponent(token)}`;
 }
 
 export function parseShellMessage(payload: string): ShellIncomingMessage | null {

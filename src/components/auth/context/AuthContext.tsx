@@ -1,7 +1,8 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { IS_PLATFORM } from '../../../constants/config';
-import { api } from '../../../utils/api';
-import { AUTH_ERROR_MESSAGES, AUTH_TOKEN_STORAGE_KEY } from '../constants';
+import { createApiClient } from '../../../utils/api';
+import { useBackend } from '../../../contexts/BackendContext';
+import { AUTH_ERROR_MESSAGES, getBackendTokenKey } from '../constants';
 import type {
   AuthContextValue,
   AuthProviderProps,
@@ -15,16 +16,6 @@ import { parseJsonSafely, resolveApiErrorMessage } from '../utils';
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const readStoredToken = (): string | null => localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
-
-const persistToken = (token: string) => {
-  localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token);
-};
-
-const clearStoredToken = () => {
-  localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
-};
-
 export function useAuth(): AuthContextValue {
   const context = useContext(AuthContext);
   if (!context) {
@@ -35,28 +26,52 @@ export function useAuth(): AuthContextValue {
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
+  const { activeBackend } = useBackend();
+  const baseUrl = activeBackend.url;
+  const tokenKey = getBackendTokenKey(baseUrl);
+
+  // Memoize the api client per-backend
+  const apiClient = useMemo(() => createApiClient(baseUrl, tokenKey), [baseUrl, tokenKey]);
+
+  const readStoredToken = useCallback((): string | null => localStorage.getItem(tokenKey), [tokenKey]);
+  const persistToken = useCallback((t: string) => localStorage.setItem(tokenKey, t), [tokenKey]);
+  const clearStoredToken = useCallback(() => localStorage.removeItem(tokenKey), [tokenKey]);
+
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [token, setToken] = useState<string | null>(() => readStoredToken());
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem(tokenKey));
   const [isLoading, setIsLoading] = useState(true);
   const [needsSetup, setNeedsSetup] = useState(false);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Track backend switches — re-read token for the new backend
+  const prevTokenKeyRef = useRef(tokenKey);
+  useEffect(() => {
+    if (prevTokenKeyRef.current !== tokenKey) {
+      prevTokenKeyRef.current = tokenKey;
+      const storedToken = localStorage.getItem(tokenKey);
+      setToken(storedToken);
+      setUser(null);
+      setIsLoading(true);
+      setError(null);
+    }
+  }, [tokenKey]);
+
   const setSession = useCallback((nextUser: AuthUser, nextToken: string) => {
     setUser(nextUser);
     setToken(nextToken);
     persistToken(nextToken);
-  }, []);
+  }, [persistToken]);
 
   const clearSession = useCallback(() => {
     setUser(null);
     setToken(null);
     clearStoredToken();
-  }, []);
+  }, [clearStoredToken]);
 
   const checkOnboardingStatus = useCallback(async () => {
     try {
-      const response = await api.user.onboardingStatus();
+      const response = await apiClient.user.onboardingStatus();
       if (!response.ok) {
         return;
       }
@@ -65,10 +80,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setHasCompletedOnboarding(Boolean(payload?.hasCompletedOnboarding));
     } catch (caughtError) {
       console.error('Error checking onboarding status:', caughtError);
-      // Fail open to avoid blocking access on transient onboarding status errors.
       setHasCompletedOnboarding(true);
     }
-  }, []);
+  }, [apiClient]);
 
   const refreshOnboardingStatus = useCallback(async () => {
     await checkOnboardingStatus();
@@ -79,7 +93,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setIsLoading(true);
       setError(null);
 
-      const statusResponse = await api.auth.status();
+      const statusResponse = await apiClient.auth.status();
       const statusPayload = await parseJsonSafely<AuthStatusPayload>(statusResponse);
 
       if (statusPayload?.needsSetup) {
@@ -89,11 +103,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       setNeedsSetup(false);
 
-      if (!token) {
+      const currentToken = localStorage.getItem(tokenKey);
+      if (!currentToken) {
         return;
       }
 
-      const userResponse = await api.auth.user();
+      const userResponse = await apiClient.auth.user();
       if (!userResponse.ok) {
         clearSession();
         return;
@@ -113,7 +128,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [checkOnboardingStatus, clearSession, token]);
+  }, [checkOnboardingStatus, clearSession, tokenKey, apiClient]);
 
   useEffect(() => {
     if (IS_PLATFORM) {
@@ -132,7 +147,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     async (username, password) => {
       try {
         setError(null);
-        const response = await api.auth.login(username, password);
+        const response = await apiClient.auth.login(username, password);
         const payload = await parseJsonSafely<AuthSessionPayload>(response);
 
         if (!response.ok || !payload?.token || !payload.user) {
@@ -151,14 +166,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return { success: false, error: AUTH_ERROR_MESSAGES.networkError };
       }
     },
-    [checkOnboardingStatus, setSession],
+    [checkOnboardingStatus, setSession, apiClient],
   );
 
   const register = useCallback<AuthContextValue['register']>(
     async (username, password) => {
       try {
         setError(null);
-        const response = await api.auth.register(username, password);
+        const response = await apiClient.auth.register(username, password);
         const payload = await parseJsonSafely<AuthSessionPayload>(response);
 
         if (!response.ok || !payload?.token || !payload.user) {
@@ -177,7 +192,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return { success: false, error: AUTH_ERROR_MESSAGES.networkError };
       }
     },
-    [checkOnboardingStatus, setSession],
+    [checkOnboardingStatus, setSession, apiClient],
   );
 
   const logout = useCallback(() => {
@@ -185,11 +200,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
     clearSession();
 
     if (tokenToInvalidate) {
-      void api.auth.logout().catch((caughtError: unknown) => {
+      void apiClient.auth.logout().catch((caughtError: unknown) => {
         console.error('Logout endpoint error:', caughtError);
       });
     }
-  }, [clearSession, token]);
+  }, [clearSession, token, apiClient]);
 
   const contextValue = useMemo<AuthContextValue>(
     () => ({

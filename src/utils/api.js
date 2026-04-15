@@ -1,8 +1,10 @@
 import { IS_PLATFORM } from "../constants/config";
 
 // Utility function for authenticated API calls
-export const authenticatedFetch = (url, options = {}) => {
-  const token = localStorage.getItem('auth-token');
+// backendOpts: { baseUrl?: string, tokenKey?: string } — injected by BackendContext consumers
+export const authenticatedFetch = (url, options = {}, backendOpts = {}) => {
+  const { baseUrl = '', tokenKey = 'auth-token' } = backendOpts;
+  const token = localStorage.getItem(tokenKey);
 
   const defaultHeaders = {};
 
@@ -15,8 +17,11 @@ export const authenticatedFetch = (url, options = {}) => {
     defaultHeaders['Authorization'] = `Bearer ${token}`;
   }
 
-  return fetch(url, {
+  const fullUrl = baseUrl ? `${baseUrl}${url}` : url;
+
+  return fetch(fullUrl, {
     ...options,
+    ...(baseUrl ? { credentials: 'include' } : {}),
     headers: {
       ...defaultHeaders,
       ...options.headers,
@@ -24,7 +29,7 @@ export const authenticatedFetch = (url, options = {}) => {
   }).then((response) => {
     const refreshedToken = response.headers.get('X-Refreshed-Token');
     if (refreshedToken) {
-      localStorage.setItem('auth-token', refreshedToken);
+      localStorage.setItem(tokenKey, refreshedToken);
     }
     return response;
   });
@@ -237,4 +242,117 @@ export const api = {
     method: 'DELETE',
     ...options,
   }),
+};
+
+// Factory: create an api client that routes all requests through a specific backend
+export const createApiClient = (baseUrl, tokenKey) => {
+  const opts = { baseUrl, tokenKey };
+  const bf = (url, options = {}) => authenticatedFetch(url, options, opts);
+
+  return {
+    auth: {
+      status: () => fetch(baseUrl ? `${baseUrl}/api/auth/status` : '/api/auth/status'),
+      login: (username, password) => fetch(baseUrl ? `${baseUrl}/api/auth/login` : '/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        ...(baseUrl ? { credentials: 'include' } : {}),
+        body: JSON.stringify({ username, password }),
+      }),
+      register: (username, password) => fetch(baseUrl ? `${baseUrl}/api/auth/register` : '/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        ...(baseUrl ? { credentials: 'include' } : {}),
+        body: JSON.stringify({ username, password }),
+      }),
+      user: () => bf('/api/auth/user'),
+      logout: () => bf('/api/auth/logout', { method: 'POST' }),
+    },
+    projects: () => bf('/api/projects'),
+    sessions: (projectName, limit = 5, offset = 0) =>
+      bf(`/api/projects/${projectName}/sessions?limit=${limit}&offset=${offset}`),
+    unifiedSessionMessages: (sessionId, provider = 'claude', { projectName = '', projectPath = '', limit = null, offset = 0 } = {}) => {
+      const params = new URLSearchParams();
+      params.append('provider', provider);
+      if (projectName) params.append('projectName', projectName);
+      if (projectPath) params.append('projectPath', projectPath);
+      if (limit !== null) {
+        params.append('limit', String(limit));
+        params.append('offset', String(offset));
+      }
+      const queryString = params.toString();
+      return bf(`/api/sessions/${encodeURIComponent(sessionId)}/messages${queryString ? `?${queryString}` : ''}`);
+    },
+    renameProject: (projectName, displayName) =>
+      bf(`/api/projects/${projectName}/rename`, { method: 'PUT', body: JSON.stringify({ displayName }) }),
+    deleteSession: (projectName, sessionId) =>
+      bf(`/api/projects/${projectName}/sessions/${sessionId}`, { method: 'DELETE' }),
+    renameSession: (sessionId, summary, provider) =>
+      bf(`/api/sessions/${sessionId}/rename`, { method: 'PUT', body: JSON.stringify({ summary, provider }) }),
+    deleteCodexSession: (sessionId) =>
+      bf(`/api/codex/sessions/${sessionId}`, { method: 'DELETE' }),
+    deleteGeminiSession: (sessionId) =>
+      bf(`/api/gemini/sessions/${sessionId}`, { method: 'DELETE' }),
+    deleteProject: (projectName, force = false) =>
+      bf(`/api/projects/${projectName}${force ? '?force=true' : ''}`, { method: 'DELETE' }),
+    searchConversationsUrl: (query, limit = 50) => {
+      const token = localStorage.getItem(tokenKey);
+      const params = new URLSearchParams({ q: query, limit: String(limit) });
+      if (token) params.set('token', token);
+      const prefix = baseUrl || '';
+      return `${prefix}/api/search/conversations?${params.toString()}`;
+    },
+    createProject: (path) =>
+      bf('/api/projects/create', { method: 'POST', body: JSON.stringify({ path }) }),
+    createWorkspace: (workspaceData) =>
+      bf('/api/projects/create-workspace', { method: 'POST', body: JSON.stringify(workspaceData) }),
+    readFile: (projectName, filePath) =>
+      bf(`/api/projects/${projectName}/file?filePath=${encodeURIComponent(filePath)}`),
+    readFileBlob: (projectName, filePath) =>
+      bf(`/api/projects/${projectName}/files/content?path=${encodeURIComponent(filePath)}`),
+    saveFile: (projectName, filePath, content) =>
+      bf(`/api/projects/${projectName}/file`, { method: 'PUT', body: JSON.stringify({ filePath, content }) }),
+    getFiles: (projectName, options = {}) =>
+      bf(`/api/projects/${projectName}/files`, options),
+    createFile: (projectName, { path, type, name }) =>
+      bf(`/api/projects/${projectName}/files/create`, { method: 'POST', body: JSON.stringify({ path, type, name }) }),
+    renameFile: (projectName, { oldPath, newName }) =>
+      bf(`/api/projects/${projectName}/files/rename`, { method: 'PUT', body: JSON.stringify({ oldPath, newName }) }),
+    deleteFile: (projectName, { path, type }) =>
+      bf(`/api/projects/${projectName}/files`, { method: 'DELETE', body: JSON.stringify({ path, type }) }),
+    uploadFiles: (projectName, formData) =>
+      bf(`/api/projects/${projectName}/files/upload`, { method: 'POST', body: formData, headers: {} }),
+    taskmaster: {
+      init: (projectName) => bf(`/api/taskmaster/init/${projectName}`, { method: 'POST' }),
+      addTask: (projectName, { prompt, title, description, priority, dependencies }) =>
+        bf(`/api/taskmaster/add-task/${projectName}`, { method: 'POST', body: JSON.stringify({ prompt, title, description, priority, dependencies }) }),
+      parsePRD: (projectName, { fileName, numTasks, append }) =>
+        bf(`/api/taskmaster/parse-prd/${projectName}`, { method: 'POST', body: JSON.stringify({ fileName, numTasks, append }) }),
+      getTemplates: () => bf('/api/taskmaster/prd-templates'),
+      applyTemplate: (projectName, { templateId, fileName, customizations }) =>
+        bf(`/api/taskmaster/apply-template/${projectName}`, { method: 'POST', body: JSON.stringify({ templateId, fileName, customizations }) }),
+      updateTask: (projectName, taskId, updates) =>
+        bf(`/api/taskmaster/update-task/${projectName}/${taskId}`, { method: 'PUT', body: JSON.stringify(updates) }),
+    },
+    browseFilesystem: (dirPath = null) => {
+      const params = new URLSearchParams();
+      if (dirPath) params.append('path', dirPath);
+      return bf(`/api/browse-filesystem?${params}`);
+    },
+    createFolder: (folderPath) =>
+      bf('/api/create-folder', { method: 'POST', body: JSON.stringify({ path: folderPath }) }),
+    user: {
+      gitConfig: () => bf('/api/user/git-config'),
+      updateGitConfig: (gitName, gitEmail) =>
+        bf('/api/user/git-config', { method: 'POST', body: JSON.stringify({ gitName, gitEmail }) }),
+      onboardingStatus: () => bf('/api/user/onboarding-status'),
+      completeOnboarding: () => bf('/api/user/complete-onboarding', { method: 'POST' }),
+    },
+    get: (endpoint) => bf(`/api${endpoint}`),
+    post: (endpoint, body) => bf(`/api${endpoint}`, {
+      method: 'POST',
+      ...(body instanceof FormData ? { body } : { body: JSON.stringify(body) }),
+    }),
+    put: (endpoint, body) => bf(`/api${endpoint}`, { method: 'PUT', body: JSON.stringify(body) }),
+    delete: (endpoint, options = {}) => bf(`/api${endpoint}`, { method: 'DELETE', ...options }),
+  };
 };

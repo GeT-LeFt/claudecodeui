@@ -41,6 +41,8 @@ export interface ChatMessage {
   toolId?: string;
   toolCallId?: string;
   isSubagentContainer?: boolean;
+  isSystemNotification?: boolean;
+  notificationType?: string;
   subagentState?: {
     childTools: SubagentChildTool[];
     currentToolIndex: number;

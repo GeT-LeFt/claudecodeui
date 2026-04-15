@@ -95,6 +95,20 @@ export function normalizeMessage(raw, sessionId) {
   const ts = raw.timestamp || new Date().toISOString();
   const baseId = raw.uuid || generateMessageId('claude');
 
+  // Compact boundary marker (system event written to JSONL after compaction)
+  if (raw.type === 'system' && raw.subtype === 'compact_boundary') {
+    messages.push(createNormalizedMessage({
+      id: raw.uuid || baseId,
+      sessionId,
+      timestamp: ts,
+      provider: PROVIDER,
+      kind: 'system_notification',
+      content: 'Conversation compacted',
+      notificationType: 'compaction',
+    }));
+    return messages;
+  }
+
   // User message
   if (raw.message?.role === 'user' && raw.message?.content) {
     if (Array.isArray(raw.message.content)) {

@@ -96,7 +96,8 @@
     "tasks": "任务",
     "notifications": "通知",
     "plugins": "插件",
-    "about": "关于"
+    "about": "关于",
+    "backends": "后端"
   },
   "notifications": {
     "title": "通知",
@@ -480,5 +481,29 @@
     "installAriaLabel": "插件 git 仓库 URL",
     "tab": "标签",
     "runningStatus": "运行中"
+  },
+  "backends": {
+    "title": "后端",
+    "description": "管理后端服务器连接。在本地和远程 CloudCLI 实例之间切换。",
+    "name": "名称",
+    "url": "URL",
+    "urlPlaceholder": "https://example.com:8080",
+    "namePlaceholder": "例如 云服务器",
+    "addBackend": "添加后端",
+    "removeBackend": "删除",
+    "testConnection": "测试",
+    "testing": "测试中...",
+    "connected": "已连接",
+    "disconnected": "未连接",
+    "connectionFailed": "连接失败",
+    "connectionSuccess": "连接成功",
+    "default": "默认",
+    "active": "当前",
+    "switchTo": "切换到",
+    "cannotRemoveDefault": "无法删除默认后端",
+    "confirmRemove": "确认删除此后端？",
+    "noUrl": "请输入 URL",
+    "noName": "请输入名称",
+    "manageBackends": "管理后端..."
   }
 }

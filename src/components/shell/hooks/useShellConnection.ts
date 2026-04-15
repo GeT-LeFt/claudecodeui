@@ -3,6 +3,8 @@ import type { MutableRefObject } from 'react';
 import type { FitAddon } from '@xterm/addon-fit';
 import type { Terminal } from '@xterm/xterm';
 import type { Project, ProjectSession } from '../../../types/app';
+import { useBackend } from '../../../contexts/BackendContext';
+import { getBackendTokenKey } from '../../auth/constants';
 import { TERMINAL_INIT_DELAY_MS } from '../constants/constants';
 import { getShellWebSocketUrl, parseShellMessage, sendSocketMessage } from '../utils/socket';
 
@@ -51,6 +53,9 @@ export function useShellConnection({
   setAuthUrl,
   onOutputRef,
 }: UseShellConnectionOptions): UseShellConnectionResult {
+  const { activeBackend } = useBackend();
+  const backendUrl = activeBackend.url;
+  const tokenKey = getBackendTokenKey(backendUrl);
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const connectingRef = useRef(false);
@@ -114,7 +119,7 @@ export function useShellConnection({
       }
 
       try {
-        const wsUrl = getShellWebSocketUrl();
+        const wsUrl = getShellWebSocketUrl(backendUrl, tokenKey);
         if (!wsUrl) {
           connectingRef.current = false;
           setIsConnecting(false);

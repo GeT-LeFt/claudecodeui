@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { NavigateFunction } from 'react-router-dom';
-import { api } from '../utils/api';
+import { api, createApiClient } from '../utils/api';
+import { useBackend } from '../contexts/BackendContext';
+import { getBackendTokenKey } from '../components/auth/constants';
 import type {
   AppSocketMessage,
   AppTab,
@@ -133,6 +135,11 @@ export function useProjectsState({
   isMobile,
   activeSessions,
 }: UseProjectsStateArgs) {
+  const { activeBackend } = useBackend();
+  const backendUrl = activeBackend.url;
+  const tokenKey = getBackendTokenKey(backendUrl);
+  const apiClient = useMemo(() => createApiClient(backendUrl, tokenKey), [backendUrl, tokenKey]);
+
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [selectedSession, setSelectedSession] = useState<ProjectSession | null>(null);
@@ -161,7 +168,7 @@ export function useProjectsState({
       if (showLoadingState) {
         setIsLoadingProjects(true);
       }
-      const response = await api.projects();
+      const response = await apiClient.projects();
       const projectData = (await response.json()) as Project[];
 
       setProjects((prevProjects) => {
@@ -180,7 +187,7 @@ export function useProjectsState({
         setIsLoadingProjects(false);
       }
     }
-  }, []);
+  }, [apiClient]);
 
   const refreshProjectsSilently = useCallback(async () => {
     // Keep chat view stable while still syncing sidebar/session metadata in background.
@@ -195,6 +202,17 @@ export function useProjectsState({
   useEffect(() => {
     void fetchProjects();
   }, [fetchProjects]);
+
+  // Reset selection when backend changes
+  const prevBackendUrlRef = useRef(backendUrl);
+  useEffect(() => {
+    if (prevBackendUrlRef.current !== backendUrl) {
+      prevBackendUrlRef.current = backendUrl;
+      setSelectedProject(null);
+      setSelectedSession(null);
+      setProjects([]);
+    }
+  }, [backendUrl]);
 
   // Auto-select the project when there is only one, so the user lands on the new session page
   useEffect(() => {
