@@ -26,6 +26,7 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 COPY package.json package-lock.json ./
+COPY scripts ./scripts
 RUN npm ci --omit=dev
 
 # Copy built outputs from builder
@@ -33,7 +34,6 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/dist-server ./dist-server
 COPY --from=builder /app/shared ./shared
 COPY --from=builder /app/public ./public
-COPY --from=builder /app/scripts ./scripts
 
 ENV NODE_ENV=production
 ENV SERVER_PORT=3001
