@@ -200,29 +200,107 @@ jobs:
           key: ${{ secrets.ECS_SSH_KEY }}
           script: |
             set -e
+            DEPLOY_ENV="${{ needs.docker-build-push.outputs.deploy-env }}"
             IMAGE="${{ secrets.ACR_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.docker-build-push.outputs.image-tag }}"
 
+            # Environment-specific configuration
+            if [ "$DEPLOY_ENV" = "staging" ]; then
+              CONTAINER_NAME="cloudcli-ui-staging"
+              HOST_PORT=3002
+              DATA_DIR="/opt/cloudcli/data-staging"
+              ENV_FILE="/opt/cloudcli/.env.staging"
+            else
+              CONTAINER_NAME="cloudcli-ui"
+              HOST_PORT=3001
+              DATA_DIR="/opt/cloudcli/data"
+              ENV_FILE="/opt/cloudcli/.env"
+            fi
+
+            echo "[Deploy] Environment: $DEPLOY_ENV"
+            echo "[Deploy] Container: $CONTAINER_NAME, Port: $HOST_PORT"
             echo "[Deploy] Pulling image: $IMAGE"
             docker pull "$IMAGE"
 
             echo "[Deploy] Stopping old container..."
-            docker stop cloudcli-ui 2>/dev/null || true
-            docker rm cloudcli-ui 2>/dev/null || true
+            docker stop "$CONTAINER_NAME" 2>/dev/null || true
+            docker rm "$CONTAINER_NAME" 2>/dev/null || true
 
             echo "[Deploy] Starting new container..."
-            mkdir -p /opt/cloudcli/data
+            mkdir -p "$DATA_DIR"
             docker run -d \
-              --name cloudcli-ui \
+              --name "$CONTAINER_NAME" \
               --restart unless-stopped \
-              -p 3001:3001 \
-              -v /opt/cloudcli/data:/root/.cloudcli \
-              --env-file /opt/cloudcli/.env \
+              -p "$HOST_PORT":3001 \
+              -v "$DATA_DIR":/root/.cloudcli \
+              --env-file "$ENV_FILE" \
               "$IMAGE"
 
             echo "[Deploy] Waiting for health check..."
             for i in $(seq 1 15); do
-              if curl -sf http://localhost:3001/health > /dev/null 2>&1; then
+              if curl -sf "http://localhost:$HOST_PORT/health" > /dev/null 2>&1; then
                 echo "[Deploy] Health check passed!"
+
+                # Staging: setup nginx reverse proxy on first deploy
+                if [ "$DEPLOY_ENV" = "staging" ] && [ ! -f /etc/nginx/sites-available/cloudcli-staging ]; then
+                  echo "[Deploy] Creating staging nginx config (8089 HTTP + 8444 HTTPS)..."
+                  cat > /etc/nginx/sites-available/cloudcli-staging << 'NGINX_CONF'
+            server {
+                listen 8089;
+                server_name _;
+                client_max_body_size 50M;
+                location / {
+                    proxy_pass http://127.0.0.1:3002;
+                    proxy_http_version 1.1;
+                    proxy_set_header Upgrade $http_upgrade;
+                    proxy_set_header Connection "upgrade";
+                    proxy_set_header Host $host;
+                    proxy_set_header X-Real-IP $remote_addr;
+                    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                    proxy_set_header X-Forwarded-Proto $scheme;
+                    proxy_read_timeout 86400;
+                    proxy_send_timeout 86400;
+                }
+            }
+            server {
+                listen 8444 ssl;
+                server_name _;
+                ssl_certificate /etc/nginx/ssl/cloudcli.crt;
+                ssl_certificate_key /etc/nginx/ssl/cloudcli.key;
+                ssl_protocols TLSv1.2 TLSv1.3;
+                ssl_ciphers HIGH:!aNULL:!MD5;
+                client_max_body_size 50M;
+                location / {
+                    proxy_pass http://127.0.0.1:3002;
+                    proxy_http_version 1.1;
+                    proxy_set_header Upgrade $http_upgrade;
+                    proxy_set_header Connection "upgrade";
+                    proxy_set_header Host $host;
+                    proxy_set_header X-Real-IP $remote_addr;
+                    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                    proxy_set_header X-Forwarded-Proto https;
+                    proxy_read_timeout 86400;
+                    proxy_send_timeout 86400;
+                }
+            }
+            NGINX_CONF
+                  ln -sf /etc/nginx/sites-available/cloudcli-staging /etc/nginx/sites-enabled/cloudcli-staging
+                  if nginx -t 2>/dev/null; then
+                    nginx -s reload
+                    echo "[Deploy] Nginx staging config created and reloaded."
+                  else
+                    echo "[Deploy] WARNING: Nginx config test failed, skipping reload."
+                    rm -f /etc/nginx/sites-available/cloudcli-staging /etc/nginx/sites-enabled/cloudcli-staging
+                  fi
+                fi
+
+                # Staging: auto-register test account (safe to retry — 403 if user exists)
+                if [ "$DEPLOY_ENV" = "staging" ]; then
+                  echo "[Deploy] Registering staging test account..."
+                  curl -sf -X POST "http://localhost:$HOST_PORT/api/auth/register" \
+                    -H 'Content-Type: application/json' \
+                    -d '{"username":"staging-test","password":"staging-test-2026"}' || echo "[Deploy] Test account already exists, skipping."
+                fi
+
                 exit 0
               fi
               echo "[Deploy] Waiting... ($i/15)"
@@ -230,7 +308,7 @@ jobs:
             done
 
             echo "[Deploy] Health check failed!"
-            docker logs cloudcli-ui --tail 50
+            docker logs "$CONTAINER_NAME" --tail 50
             exit 1
 
       - name: Deployment summary
