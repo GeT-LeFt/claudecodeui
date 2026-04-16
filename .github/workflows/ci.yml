@@ -301,7 +301,7 @@ jobs:
                     -d '{"username":"staging-test","password":"staging-test-2026"}' || echo "[Deploy] Test account already exists, skipping."
 
                   echo "[Deploy] Auto-completing onboarding for staging-test..."
-                  docker exec "$CONTAINER_NAME" sqlite3 /root/.cloudcli/auth.db \
+                  sqlite3 "$DATA_DIR/auth.db" \
                     "UPDATE users SET git_name='staging-test', git_email='staging@test.local', has_completed_onboarding=1 WHERE username='staging-test';" \
                     || echo "[Deploy] Onboarding auto-complete failed, skipping."
                 fi
