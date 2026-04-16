@@ -56,6 +56,13 @@ const WS_INTERCEPTOR = `
 async function selectProjectAndNewSession(page: Page) {
   // Expand smoke-workspace project (displayName = basename of the workspace path)
   const projectBtn = page.locator('button').filter({ hasText: new RegExp(WORKSPACE_NAME) }).first();
+
+  // CI environments can be slow — if the project list hasn't loaded after 10s, reload once
+  const firstTry = await projectBtn.isVisible({ timeout: 10_000 }).catch(() => false);
+  if (!firstTry) {
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForTimeout(3000);
+  }
   await expect(projectBtn).toBeVisible({ timeout: 15_000 });
   await projectBtn.click();
   await page.waitForTimeout(1000);

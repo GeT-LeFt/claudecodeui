@@ -58,6 +58,12 @@ test.describe('System notification (compaction) E2E', () => {
 
   test.beforeAll(() => {
     token = generateTestToken();
+    // In CI, smoke test beforeAll creates auth.db with a smoke-ci user
+    // but no @cloudcli-ai project — token is non-null but environment is wrong.
+    // Skip if TEST_PASSWORD is absent (CI) since these tests need a real dev setup.
+    if (!process.env.TEST_PASSWORD && !process.env.TEST_USERNAME) {
+      token = null; // force skip — smoke.spec.ts covers notification rendering in CI
+    }
   });
 
   async function loginAndNavigateToSession(page: any) {
