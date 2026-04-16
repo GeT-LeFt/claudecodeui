@@ -26,20 +26,14 @@ async function ensureTestAccount(page: import('@playwright/test').Page) {
     data: { username: TEST_USER, password: TEST_PASS },
   }).catch(() => null);
 
-  // 2. If newly registered, complete onboarding via API
+  // 2. If newly registered, complete onboarding so we skip the setup wizard
   if (regRes && regRes.status() === 200) {
     const loginRes = await page.request.post(`${BASE}/api/auth/login`, {
       data: { username: TEST_USER, password: TEST_PASS },
-    });
-    if (loginRes.status() === 200) {
+    }).catch(() => null);
+    if (loginRes && loginRes.status() === 200) {
       const { token } = await loginRes.json();
       const headers = { Authorization: `Bearer ${token}` };
-      // Set git config
-      await page.request.post(`${BASE}/api/user/git-config`, {
-        headers,
-        data: { gitName: 'staging-test', gitEmail: 'staging@test.local' },
-      }).catch(() => {});
-      // Mark onboarding complete
       await page.request.post(`${BASE}/api/user/complete-onboarding`, {
         headers,
       }).catch(() => {});
