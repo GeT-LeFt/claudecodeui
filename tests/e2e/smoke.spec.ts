@@ -364,10 +364,22 @@ test.describe('Smoke tests — core UI interactions', () => {
   test('settings modal opens, all tabs clickable, and closes', async ({ page }) => {
     await expect(page.getByText('CloudCLI').first()).toBeVisible({ timeout: 8000 });
 
-    // Open Settings
-    // Use the sidebar footer Settings button (not the collapsed one)
+    // Open Settings — try multiple strategies (sidebar may be collapsed in CI)
     const settingsBtn = page.locator('button').filter({ hasText: /^Settings$/ }).first();
-    await settingsBtn.click();
+    const found = await settingsBtn.waitFor({ state: 'visible', timeout: 5_000 }).then(() => true).catch(() => false);
+    if (found) {
+      await settingsBtn.click();
+    } else {
+      // Fallback: gear icon button or aria-label
+      const gearBtn = page.locator('button[aria-label="Settings"], button[aria-label="设置"]').first();
+      const gearFound = await gearBtn.waitFor({ state: 'visible', timeout: 5_000 }).then(() => true).catch(() => false);
+      if (gearFound) {
+        await gearBtn.click();
+      } else {
+        // Last resort: any button containing "settings" text (case-insensitive)
+        await page.locator('button').filter({ hasText: /settings/i }).first().click();
+      }
+    }
     await page.waitForTimeout(500);
 
     // Modal should appear
