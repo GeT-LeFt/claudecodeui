@@ -160,6 +160,9 @@ export function useSidebarController({
 
       return changed || Object.keys(prev).length !== Object.keys(next).length ? next : prev;
     });
+    // Reset hasMore overrides so the button falls back to the fresh
+    // server-provided sessionMeta.hasMore on each projects refresh.
+    setProjectHasMoreOverrides({});
   }, [projects]);
 
   useEffect(() => {
