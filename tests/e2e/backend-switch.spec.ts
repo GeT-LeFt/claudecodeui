@@ -1,6 +1,10 @@
 /**
  * E2E tests: Backend switching + token isolation + logout button
  *
+ * These tests require a running server with valid credentials.
+ * In CI, they run only when TEST_PASSWORD is set (i.e., against staging).
+ * Locally, they use default staging-test credentials.
+ *
  * Verifies:
  *  1. Login on current server works
  *  2. Settings page opens and shows correct logout button text
@@ -14,37 +18,13 @@ import { test, expect } from '@playwright/test';
 
 const BASE = process.env.TEST_BASE_URL || 'http://localhost:3001';
 const TEST_USER = process.env.TEST_USERNAME || 'staging-test';
-const TEST_PASS = process.env.TEST_PASSWORD || 'staging-test-2026';
+const TEST_PASS = process.env.TEST_PASSWORD || '';
 
 // Allow self-signed certs (staging uses self-signed SSL)
 test.use({ ignoreHTTPSErrors: true });
 
-// Helper: ensure test account exists and has completed onboarding
-async function ensureTestAccount(page: import('@playwright/test').Page) {
-  // 1. Register (ignore if already exists)
-  const regRes = await page.request.post(`${BASE}/api/auth/register`, {
-    data: { username: TEST_USER, password: TEST_PASS },
-  }).catch(() => null);
-
-  // 2. If newly registered, complete onboarding so we skip the setup wizard
-  if (regRes && regRes.status() === 200) {
-    const loginRes = await page.request.post(`${BASE}/api/auth/login`, {
-      data: { username: TEST_USER, password: TEST_PASS },
-    }).catch(() => null);
-    if (loginRes && loginRes.status() === 200) {
-      const { token } = await loginRes.json();
-      const headers = { Authorization: `Bearer ${token}` };
-      await page.request.post(`${BASE}/api/user/complete-onboarding`, {
-        headers,
-      }).catch(() => {});
-    }
-  }
-}
-
 // Helper: login via API + inject token into localStorage
 async function loginViaApi(page: import('@playwright/test').Page) {
-  await ensureTestAccount(page);
-
   const res = await page.request.post(`${BASE}/api/auth/login`, {
     data: { username: TEST_USER, password: TEST_PASS },
   });
@@ -84,6 +64,12 @@ async function openSettings(page: import('@playwright/test').Page) {
 }
 
 test.describe('Backend switching & logout', () => {
+  test.beforeEach(async () => {
+    if (!TEST_PASS) {
+      test.skip(true, 'TEST_PASSWORD not set — skipping authenticated backend-switch tests');
+    }
+  });
+
   test('login, verify settings logout button, and logout flow', async ({ page }) => {
     // 1. Login
     await loginViaApi(page);
