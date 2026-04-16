@@ -1,5 +1,7 @@
 import { X } from 'lucide-react';
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useAuth } from '../../auth/context/AuthContext';
 import ProviderLoginModal from '../../provider-auth/view/ProviderLoginModal';
 import { Button } from '../../../shared/view/ui';
 import ClaudeMcpFormModal from '../view/modals/ClaudeMcpFormModal';
@@ -20,6 +22,12 @@ import type { SettingsProps } from '../types/types';
 
 function Settings({ isOpen, onClose, projects = [], initialTab = 'agents' }: SettingsProps) {
   const { t } = useTranslation('settings');
+  const { logout } = useAuth();
+
+  const handleLogout = useCallback(() => {
+    onClose();
+    logout();
+  }, [onClose, logout]);
   const {
     activeTab,
     setActiveTab,
@@ -125,7 +133,7 @@ function Settings({ isOpen, onClose, projects = [], initialTab = 'agents' }: Set
 
         {/* Body: sidebar + content */}
         <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-          <SettingsSidebar activeTab={activeTab} onChange={setActiveTab} />
+          <SettingsSidebar activeTab={activeTab} onChange={setActiveTab} onLogout={handleLogout} />
 
           {/* Content */}
           <main className="flex-1 overflow-y-auto">

@@ -1,4 +1,4 @@
-import { Bell, Bot, GitBranch, Info, Key, ListChecks, Palette, Puzzle, Server } from 'lucide-react';
+import { Bell, Bot, GitBranch, Info, Key, ListChecks, LogOut, Palette, Puzzle, Server } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '../../../lib/utils';
 import { PillBar, Pill } from '../../../shared/view/ui';
@@ -7,6 +7,7 @@ import type { SettingsMainTab } from '../types/types';
 type SettingsSidebarProps = {
   activeTab: SettingsMainTab;
   onChange: (tab: SettingsMainTab) => void;
+  onLogout?: () => void;
 };
 
 type NavItem = {
@@ -27,14 +28,14 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'about', labelKey: 'mainTabs.about', icon: Info },
 ];
 
-export default function SettingsSidebar({ activeTab, onChange }: SettingsSidebarProps) {
-  const { t } = useTranslation('settings');
+export default function SettingsSidebar({ activeTab, onChange, onLogout }: SettingsSidebarProps) {
+  const { t } = useTranslation(['settings', 'common']);
 
   return (
     <>
       {/* Desktop sidebar */}
       <aside className="hidden w-56 flex-shrink-0 border-r border-border bg-muted/30 md:flex md:flex-col">
-        <nav className="flex flex-col gap-1 p-3">
+        <nav className="flex flex-1 flex-col gap-1 p-3">
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
@@ -56,6 +57,18 @@ export default function SettingsSidebar({ activeTab, onChange }: SettingsSidebar
             );
           })}
         </nav>
+
+        {onLogout && (
+          <div className="border-t border-border p-3">
+            <button
+              onClick={onLogout}
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-destructive transition-colors duration-150 hover:bg-destructive/10 active:bg-destructive/20"
+            >
+              <LogOut className="h-4 w-4 flex-shrink-0" />
+              {t('common:auth.logout')}
+            </button>
+          </div>
+        )}
       </aside>
 
       {/* Mobile horizontal nav — pill bar */}
@@ -76,6 +89,16 @@ export default function SettingsSidebar({ activeTab, onChange }: SettingsSidebar
               </Pill>
             );
           })}
+          {onLogout && (
+            <Pill
+              isActive={false}
+              onClick={onLogout}
+              className="flex-shrink-0 text-destructive"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              {t('common:auth.logout')}
+            </Pill>
+          )}
         </PillBar>
       </div>
     </>
