@@ -185,6 +185,8 @@ export function useShellConnection({
       }
     },
     [
+      backendUrl,
+      tokenKey,
       clearTerminalScreen,
       fitAddonRef,
       handleSocketMessage,

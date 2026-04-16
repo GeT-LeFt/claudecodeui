@@ -43,6 +43,7 @@ const useWebSocketProviderState = (): WebSocketContextType => {
   const wsRef = useRef<WebSocket | null>(null);
   const unmountedRef = useRef(false);
   const hasConnectedRef = useRef(false);
+  const connectRef = useRef<() => void>(() => {});
   const [latestMessage, setLatestMessage] = useState<any>(null);
   const [isConnected, setIsConnected] = useState(false);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -50,24 +51,9 @@ const useWebSocketProviderState = (): WebSocketContextType => {
   const { activeBackend } = useBackend();
   const backendUrl = activeBackend.url;
 
-  useEffect(() => {
-    connect();
-
-    return () => {
-      unmountedRef.current = true;
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-      }
-      if (wsRef.current) {
-        wsRef.current.close();
-      }
-    };
-  }, [token, backendUrl]); // reconnect when token or backend changes
-
   const connect = useCallback(() => {
     if (unmountedRef.current) return;
     try {
-      // Close existing connection if any
       if (wsRef.current) {
         wsRef.current.close();
         wsRef.current = null;
@@ -103,7 +89,7 @@ const useWebSocketProviderState = (): WebSocketContextType => {
 
         reconnectTimeoutRef.current = setTimeout(() => {
           if (unmountedRef.current) return;
-          connect();
+          connectRef.current();
         }, 3000);
       };
 
@@ -115,6 +101,23 @@ const useWebSocketProviderState = (): WebSocketContextType => {
       console.error('Error creating WebSocket connection:', error);
     }
   }, [token, backendUrl]);
+
+  connectRef.current = connect;
+
+  useEffect(() => {
+    unmountedRef.current = false;
+    connect();
+
+    return () => {
+      unmountedRef.current = true;
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, [connect]);
 
   const sendMessage = useCallback((message: any) => {
     const socket = wsRef.current;

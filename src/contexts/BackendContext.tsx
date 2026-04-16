@@ -37,6 +37,38 @@ const PRESET_BACKENDS: BackendConfig[] = [
   },
 ];
 
+// ────────────────────── Migration ──────────────────────
+// Commit 55e45bd changed presets:
+//   OLD: 'local' → localhost:3001, 'cloud' → 47.113.190.177:3001
+//   NEW: 'current' → '' (same-origin), 'local' → localhost:3001
+// Old 'cloud'/'local' users may have stale backend IDs and orphaned tokens.
+
+const MIGRATION_DONE_KEY = 'backend-migration-v1';
+
+function migrateBackendStorage(): void {
+  if (typeof localStorage === 'undefined') return;
+  if (localStorage.getItem(MIGRATION_DONE_KEY)) return;
+
+  const activeId = localStorage.getItem(ACTIVE_BACKEND_STORAGE_KEY);
+  const OLD_CLOUD_URL = 'http://47.113.190.177:3001';
+  const OLD_CLOUD_TOKEN_KEY = `${AUTH_TOKEN_STORAGE_KEY}::${OLD_CLOUD_URL}`;
+
+  if (activeId === 'cloud' || activeId === 'local') {
+    localStorage.setItem(ACTIVE_BACKEND_STORAGE_KEY, 'current');
+  }
+
+  const orphanedCloudToken = localStorage.getItem(OLD_CLOUD_TOKEN_KEY);
+  const sameOriginToken = localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
+  if (orphanedCloudToken && !sameOriginToken) {
+    localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, orphanedCloudToken);
+  }
+  localStorage.removeItem(OLD_CLOUD_TOKEN_KEY);
+
+  localStorage.setItem(MIGRATION_DONE_KEY, '1');
+}
+
+migrateBackendStorage();
+
 // ────────────────────── Helpers ──────────────────────
 
 export const getBackendTokenKey = (backendUrl: string): string => {
