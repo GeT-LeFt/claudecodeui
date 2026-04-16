@@ -22,17 +22,18 @@ const ACTIVE_BACKEND_STORAGE_KEY = 'active-backend-id';
 const AUTH_TOKEN_STORAGE_KEY = 'auth-token';
 
 // Pre-configured environments — no manual setup needed
-// Both use explicit URLs so switching works regardless of which UI the user is viewing.
+// 'current' uses same-origin (empty URL) so API calls follow the page's own URL.
+// This is the correct default for any deployment (staging, production, local dev via Vite proxy).
 const PRESET_BACKENDS: BackendConfig[] = [
   {
-    id: 'local',
-    name: 'Local Mac',
-    url: 'http://localhost:3001',
+    id: 'current',
+    name: 'Current Server',
+    url: '',
   },
   {
-    id: 'cloud',
-    name: 'Cloud Server',
-    url: 'http://47.113.190.177:3001',
+    id: 'local',
+    name: 'Local Dev',
+    url: 'http://localhost:3001',
   },
 ];
 
@@ -48,7 +49,7 @@ export const getBackendTokenKey = (backendUrl: string): string => {
 };
 
 const loadActiveBackendId = (): string => {
-  return localStorage.getItem(ACTIVE_BACKEND_STORAGE_KEY) || 'local';
+  return localStorage.getItem(ACTIVE_BACKEND_STORAGE_KEY) || 'current';
 };
 
 const saveActiveBackendId = (id: string) => {
