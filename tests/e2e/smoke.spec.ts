@@ -54,14 +54,29 @@ const WS_INTERCEPTOR = `
 
 /** Select the smoke-workspace project in sidebar + ensure we're in a new session */
 async function selectProjectAndNewSession(page: Page) {
+  // Ensure we're in Projects mode (a previous test may have switched to Conversations)
+  const projectsToggle = page.locator('button[aria-pressed]').filter({ hasText: 'Projects' }).first();
+  const isProjectsMode = await projectsToggle.getAttribute('aria-pressed').catch(() => 'true');
+  if (isProjectsMode !== 'true') {
+    await projectsToggle.click();
+    await page.waitForTimeout(500);
+  }
+
   // Expand smoke-workspace project (displayName = basename of the workspace path)
   const projectBtn = page.locator('button').filter({ hasText: new RegExp(WORKSPACE_NAME) }).first();
 
-  // CI environments can be slow — if the project list hasn't loaded after 10s, reload once
-  const firstTry = await projectBtn.isVisible({ timeout: 10_000 }).catch(() => false);
-  if (!firstTry) {
+  // CI environments can be slow — use waitFor (not isVisible which doesn't support timeout)
+  const found = await projectBtn.waitFor({ state: 'visible', timeout: 10_000 }).then(() => true).catch(() => false);
+  if (!found) {
     await page.reload({ waitUntil: 'networkidle' });
     await page.waitForTimeout(3000);
+    // After reload, re-ensure Projects mode
+    const toggle = page.locator('button[aria-pressed]').filter({ hasText: 'Projects' }).first();
+    const mode = await toggle.getAttribute('aria-pressed').catch(() => 'true');
+    if (mode !== 'true') {
+      await toggle.click();
+      await page.waitForTimeout(500);
+    }
   }
   await expect(projectBtn).toBeVisible({ timeout: 15_000 });
   await projectBtn.click();
