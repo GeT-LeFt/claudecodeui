@@ -80,8 +80,21 @@ export const getBackendTokenKey = (backendUrl: string): string => {
   return `${AUTH_TOKEN_STORAGE_KEY}::${backendUrl}`;
 };
 
+const isLocalDev = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  const host = window.location.hostname;
+  return host === 'localhost' || host === '127.0.0.1';
+};
+
 const loadActiveBackendId = (): string => {
-  return localStorage.getItem(ACTIVE_BACKEND_STORAGE_KEY) || 'current';
+  const stored = localStorage.getItem(ACTIVE_BACKEND_STORAGE_KEY) || 'current';
+  // 'local' backend (localhost:3001) only makes sense when the page itself is on localhost.
+  // On staging/production, force back to 'current' (same-origin).
+  if (stored === 'local' && !isLocalDev()) {
+    localStorage.setItem(ACTIVE_BACKEND_STORAGE_KEY, 'current');
+    return 'current';
+  }
+  return stored;
 };
 
 const saveActiveBackendId = (id: string) => {
@@ -112,6 +125,7 @@ export function BackendProvider({ children }: { children: React.ReactNode }) {
 
   const switchBackend = useCallback(
     (id: string) => {
+      if (id === 'local' && !isLocalDev()) return;
       if (PRESET_BACKENDS.some((b) => b.id === id)) {
         setActiveBackendId(id);
         saveActiveBackendId(id);
@@ -127,15 +141,20 @@ export function BackendProvider({ children }: { children: React.ReactNode }) {
     [activeBackend],
   );
 
+  const visibleBackends = useMemo(
+    () => isLocalDev() ? PRESET_BACKENDS : PRESET_BACKENDS.filter((b) => b.id !== 'local'),
+    [],
+  );
+
   const contextValue = useMemo<BackendContextValue>(
     () => ({
-      backends: PRESET_BACKENDS,
+      backends: visibleBackends,
       activeBackend,
       switchBackend,
       getBaseUrl,
       getAuthTokenKey,
     }),
-    [activeBackend, switchBackend, getBaseUrl, getAuthTokenKey],
+    [visibleBackends, activeBackend, switchBackend, getBaseUrl, getAuthTokenKey],
   );
 
   return <BackendContext.Provider value={contextValue}>{children}</BackendContext.Provider>;
