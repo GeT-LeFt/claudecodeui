@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { authenticatedFetch } from '../../../utils/api';
+import { useBackendFetch } from '../../../hooks/useBackendApi';
 
 type GitConfigResponse = {
   gitName?: string;
@@ -10,6 +10,7 @@ type GitConfigResponse = {
 type SaveStatus = 'success' | 'error' | null;
 
 export function useGitSettings() {
+  const authenticatedFetch = useBackendFetch();
   const [gitName, setGitName] = useState('');
   const [gitEmail, setGitEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);

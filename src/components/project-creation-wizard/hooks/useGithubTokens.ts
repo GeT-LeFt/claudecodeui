@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { fetchGithubTokenCredentials } from '../data/workspaceApi';
+import { useBackendApi } from '../../../hooks/useBackendApi';
 import type { GithubTokenCredential } from '../types';
 
 type UseGithubTokensParams = {
@@ -17,6 +18,7 @@ export const useGithubTokens = ({
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const hasLoadedRef = useRef(false);
+  const apiClient = useBackendApi();
 
   useEffect(() => {
     if (!shouldLoad || hasLoadedRef.current) {
@@ -30,7 +32,7 @@ export const useGithubTokens = ({
       setLoadError(null);
 
       try {
-        const activeTokens = await fetchGithubTokenCredentials();
+        const activeTokens = await fetchGithubTokenCredentials(apiClient);
         if (isDisposed) {
           return;
         }

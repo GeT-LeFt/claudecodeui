@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { authenticatedFetch } from '../utils/api';
+import { useBackendFetch } from './useBackendApi';
 
 type WebPushState = {
   permission: NotificationPermission | 'unsupported';
@@ -21,6 +21,7 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 }
 
 export function useWebPush(): WebPushState {
+  const authenticatedFetch = useBackendFetch();
   const [permission, setPermission] = useState<NotificationPermission | 'unsupported'>(() => {
     if (typeof window === 'undefined' || !('Notification' in window) || !('serviceWorker' in navigator)) {
       return 'unsupported';

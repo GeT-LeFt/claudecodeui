@@ -1,6 +1,6 @@
 import { useCallback, useState, useRef } from 'react';
 import type { Project } from '../../../types/app';
-import { api } from '../../../utils/api';
+import { useBackendApi } from '../../../hooks/useBackendApi';
 
 type UseFileTreeUploadOptions = {
   selectedProject: Project | null;
@@ -62,6 +62,7 @@ export const useFileTreeUpload = ({
   onRefresh,
   showToast,
 }: UseFileTreeUploadOptions) => {
+  const api = useBackendApi();
   const [isDragOver, setIsDragOver] = useState(false);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [operationLoading, setOperationLoading] = useState(false);

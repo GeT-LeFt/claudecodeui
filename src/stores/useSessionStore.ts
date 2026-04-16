@@ -7,7 +7,7 @@
  * No localStorage for messages. Backend JSONL is the source of truth.
  */
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { LLMProvider } from '../types/app';
 import { authenticatedFetch } from '../utils/api';
 
@@ -151,10 +151,24 @@ const MAX_REALTIME_MESSAGES = 500;
 // ─── Hook ────────────────────────────────────────────────────────────────────
 
 export function useSessionStore(backendOpts: { baseUrl?: string; tokenKey?: string } = {}) {
+  const backendOptsRef = useRef(backendOpts);
+  backendOptsRef.current = backendOpts;
   const storeRef = useRef(new Map<string, SessionSlot>());
   const activeSessionIdRef = useRef<string | null>(null);
+  // Track the backend URL so we can flush the cache on backend switch
+  const prevBackendUrlRef = useRef(backendOpts.baseUrl ?? '');
   // Bump to force re-render — only when the active session's data changes
   const [, setTick] = useState(0);
+
+  // Flush session cache when the backend changes
+  useEffect(() => {
+    const currentUrl = backendOpts.baseUrl ?? '';
+    if (prevBackendUrlRef.current !== currentUrl) {
+      prevBackendUrlRef.current = currentUrl;
+      storeRef.current.clear();
+      setTick(n => n + 1);
+    }
+  }, [backendOpts.baseUrl]);
   const notify = useCallback((sessionId: string) => {
     if (sessionId === activeSessionIdRef.current) {
       setTick(n => n + 1);
@@ -204,7 +218,7 @@ export function useSessionStore(backendOpts: { baseUrl?: string; tokenKey?: stri
 
       const qs = params.toString();
       const url = `/api/sessions/${encodeURIComponent(sessionId)}/messages${qs ? `?${qs}` : ''}`;
-      const response = await authenticatedFetch(url, {}, backendOpts);
+      const response = await authenticatedFetch(url, {}, backendOptsRef.current);
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
@@ -261,7 +275,7 @@ export function useSessionStore(backendOpts: { baseUrl?: string; tokenKey?: stri
     const url = `/api/sessions/${encodeURIComponent(sessionId)}/messages${qs ? `?${qs}` : ''}`;
 
     try {
-      const response = await authenticatedFetch(url, {}, backendOpts);
+      const response = await authenticatedFetch(url, {}, backendOptsRef.current);
       const data = await response.json();
       const olderMessages: NormalizedMessage[] = data.messages || [];
 
@@ -328,7 +342,7 @@ export function useSessionStore(backendOpts: { baseUrl?: string; tokenKey?: stri
 
       const qs = params.toString();
       const url = `/api/sessions/${encodeURIComponent(sessionId)}/messages${qs ? `?${qs}` : ''}`;
-      const response = await authenticatedFetch(url, {}, backendOpts);
+      const response = await authenticatedFetch(url, {}, backendOptsRef.current);
 
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();

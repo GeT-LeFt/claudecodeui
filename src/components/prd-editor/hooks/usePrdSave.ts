@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { authenticatedFetch } from '../../../utils/api';
+import { useBackendFetch } from '../../../hooks/useBackendApi';
 import type { ExistingPrdFile, SavePrdInput, SavePrdResult } from '../types';
 import { ensurePrdExtension } from '../utils/fileName';
 
@@ -22,6 +22,7 @@ export function usePrdSave({
   isExistingFile,
   onAfterSave,
 }: UsePrdSaveArgs): UsePrdSaveResult {
+  const authenticatedFetch = useBackendFetch();
   const [saving, setSaving] = useState<boolean>(false);
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
   const saveSuccessTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);

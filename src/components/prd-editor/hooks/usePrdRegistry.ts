@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { api } from '../../../utils/api';
+import { useBackendApi } from '../../../hooks/useBackendApi';
 import type { ExistingPrdFile, PrdListResponse } from '../types';
 
 type UsePrdRegistryArgs = {
@@ -16,6 +16,7 @@ function getPrdFiles(data: PrdListResponse): ExistingPrdFile[] {
 }
 
 export function usePrdRegistry({ projectName }: UsePrdRegistryArgs): UsePrdRegistryResult {
+  const api = useBackendApi();
   const [existingPrds, setExistingPrds] = useState<ExistingPrdFile[]>([]);
 
   const refreshExistingPrds = useCallback(async () => {

@@ -1,4 +1,3 @@
-import { api } from '../../../utils/api';
 import type {
   BrowseFilesystemResponse,
   CloneProgressEvent,
@@ -9,6 +8,13 @@ import type {
   FolderSuggestion,
   TokenMode,
 } from '../types';
+
+type ApiClient = {
+  get: (endpoint: string) => Promise<Response>;
+  createFolder: (path: string) => Promise<Response>;
+  createWorkspace: (data: CreateWorkspacePayload) => Promise<Response>;
+  searchConversationsUrl: (query: string, limit?: number) => string;
+};
 
 type CloneWorkspaceParams = {
   workspacePath: string;
@@ -27,8 +33,8 @@ const parseJson = async <T>(response: Response): Promise<T> => {
   return data;
 };
 
-export const fetchGithubTokenCredentials = async () => {
-  const response = await api.get('/settings/credentials?type=github_token');
+export const fetchGithubTokenCredentials = async (apiClient: ApiClient) => {
+  const response = await apiClient.get('/settings/credentials?type=github_token');
   const data = await parseJson<CredentialsResponse>(response);
 
   if (!response.ok) {
@@ -38,9 +44,9 @@ export const fetchGithubTokenCredentials = async () => {
   return (data.credentials || []).filter((credential) => credential.is_active);
 };
 
-export const browseFilesystemFolders = async (pathToBrowse: string) => {
+export const browseFilesystemFolders = async (pathToBrowse: string, apiClient: ApiClient) => {
   const endpoint = `/browse-filesystem?path=${encodeURIComponent(pathToBrowse)}`;
-  const response = await api.get(endpoint);
+  const response = await apiClient.get(endpoint);
   const data = await parseJson<BrowseFilesystemResponse>(response);
 
   if (!response.ok) {
@@ -53,8 +59,8 @@ export const browseFilesystemFolders = async (pathToBrowse: string) => {
   };
 };
 
-export const createFolderInFilesystem = async (folderPath: string) => {
-  const response = await api.createFolder(folderPath);
+export const createFolderInFilesystem = async (folderPath: string, apiClient: ApiClient) => {
+  const response = await apiClient.createFolder(folderPath);
   const data = await parseJson<CreateFolderResponse>(response);
 
   if (!response.ok) {
@@ -64,8 +70,8 @@ export const createFolderInFilesystem = async (folderPath: string) => {
   return data.path || folderPath;
 };
 
-export const createWorkspaceRequest = async (payload: CreateWorkspacePayload) => {
-  const response = await api.createWorkspace(payload);
+export const createWorkspaceRequest = async (payload: CreateWorkspacePayload, apiClient: ApiClient) => {
+  const response = await apiClient.createWorkspace(payload);
   const data = await parseJson<CreateWorkspaceResponse>(response);
 
   if (!response.ok) {
@@ -75,13 +81,21 @@ export const createWorkspaceRequest = async (payload: CreateWorkspacePayload) =>
   return data.project;
 };
 
-const buildCloneProgressQuery = ({
-  workspacePath,
-  githubUrl,
-  tokenMode,
-  selectedGithubToken,
-  newGithubToken,
-}: CloneWorkspaceParams) => {
+type BackendOpts = {
+  baseUrl?: string;
+  tokenKey?: string;
+};
+
+const buildCloneProgressQuery = (
+  {
+    workspacePath,
+    githubUrl,
+    tokenMode,
+    selectedGithubToken,
+    newGithubToken,
+  }: CloneWorkspaceParams,
+  backendOpts: BackendOpts = {},
+) => {
   const query = new URLSearchParams({
     path: workspacePath.trim(),
     githubUrl: githubUrl.trim(),
@@ -96,7 +110,8 @@ const buildCloneProgressQuery = ({
   }
 
   // EventSource cannot send custom headers, so the auth token is passed as query.
-  const authToken = localStorage.getItem('auth-token');
+  const tokenKey = backendOpts.tokenKey || 'auth-token';
+  const authToken = localStorage.getItem(tokenKey);
   if (authToken) {
     query.set('token', authToken);
   }
@@ -107,10 +122,12 @@ const buildCloneProgressQuery = ({
 export const cloneWorkspaceWithProgress = (
   params: CloneWorkspaceParams,
   handlers: CloneProgressHandlers,
+  backendOpts: BackendOpts = {},
 ) =>
   new Promise<Record<string, unknown> | undefined>((resolve, reject) => {
-    const query = buildCloneProgressQuery(params);
-    const eventSource = new EventSource(`/api/projects/clone-progress?${query}`);
+    const query = buildCloneProgressQuery(params, backendOpts);
+    const baseUrl = backendOpts.baseUrl || '';
+    const eventSource = new EventSource(`${baseUrl}/api/projects/clone-progress?${query}`);
     let settled = false;
 
     const settle = (callback: () => void) => {

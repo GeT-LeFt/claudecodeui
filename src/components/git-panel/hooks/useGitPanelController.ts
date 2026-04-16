@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { authenticatedFetch } from '../../../utils/api';
+import { useBackendFetch } from '../../../hooks/useBackendApi';
 import { DEFAULT_BRANCH, RECENT_COMMITS_LIMIT } from '../constants/constants';
 import type {
   GitApiErrorResponse,
@@ -18,9 +18,6 @@ import type {
 } from '../types/types';
 import { getAllChangedFiles } from '../utils/gitPanelUtils';
 import { useSelectedProvider } from './useSelectedProvider';
-
-// ! use authenticatedFetch directly. fetchWithAuth is redundant 
-const fetchWithAuth = authenticatedFetch as (url: string, options?: RequestInit) => Promise<Response>;
 
 function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === 'AbortError';
@@ -45,6 +42,8 @@ export function useGitPanelController({
   activeView,
   onFileOpen,
 }: UseGitPanelControllerOptions): GitPanelController {
+  const fetchWithAuth = useBackendFetch();
+  const authenticatedFetch = fetchWithAuth;
   const [gitStatus, setGitStatus] = useState<GitStatusResponse | null>(null);
   const [gitDiff, setGitDiff] = useState<GitDiffMap>({});
   const [isLoading, setIsLoading] = useState(false);

@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import { authenticatedFetch } from '../utils/api';
+import { useBackendFetch } from '../hooks/useBackendApi';
 
 export type Plugin = {
   name: string;
@@ -42,6 +42,7 @@ export function usePlugins() {
 }
 
 export function PluginsProvider({ children }: { children: ReactNode }) {
+  const authenticatedFetch = useBackendFetch();
   const [plugins, setPlugins] = useState<Plugin[]>([]);
   const [loading, setLoading] = useState(true);
   const [pluginsError, setPluginsError] = useState<string | null>(null);

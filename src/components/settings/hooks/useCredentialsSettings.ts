@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { authenticatedFetch } from '../../../utils/api';
+import { useBackendFetch } from '../../../hooks/useBackendApi';
 import type {
   ApiKeyItem,
   ApiKeysResponse,
@@ -22,6 +22,7 @@ export function useCredentialsSettings({
   confirmDeleteApiKeyText,
   confirmDeleteGithubCredentialText,
 }: UseCredentialsSettingsArgs) {
+  const authenticatedFetch = useBackendFetch();
   const [apiKeys, setApiKeys] = useState<ApiKeyItem[]>([]);
   const [githubCredentials, setGithubCredentials] = useState<GithubCredentialItem[]>([]);
   const [loading, setLoading] = useState(true);

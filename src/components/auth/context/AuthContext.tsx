@@ -44,11 +44,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // AbortController for cancelling in-flight auth checks on backend switch
+  const authCheckAbortRef = useRef<AbortController | null>(null);
+
   // Track backend switches — re-read token for the new backend
   const prevTokenKeyRef = useRef(tokenKey);
   useEffect(() => {
     if (prevTokenKeyRef.current !== tokenKey) {
       prevTokenKeyRef.current = tokenKey;
+      // Cancel in-flight auth checks from the old backend
+      authCheckAbortRef.current?.abort();
       const storedToken = localStorage.getItem(tokenKey);
       setToken(storedToken);
       setUser(null);
@@ -89,11 +94,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [checkOnboardingStatus]);
 
   const checkAuthStatus = useCallback(async () => {
+    // Cancel any previous in-flight auth check
+    authCheckAbortRef.current?.abort();
+    const abortController = new AbortController();
+    authCheckAbortRef.current = abortController;
+
     try {
       setIsLoading(true);
       setError(null);
 
       const statusResponse = await apiClient.auth.status();
+      if (abortController.signal.aborted) return;
       const statusPayload = await parseJsonSafely<AuthStatusPayload>(statusResponse);
 
       if (statusPayload?.needsSetup) {
@@ -109,6 +120,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
 
       const userResponse = await apiClient.auth.user();
+      if (abortController.signal.aborted) return;
       if (!userResponse.ok) {
         clearSession();
         return;
@@ -120,13 +132,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return;
       }
 
+      if (abortController.signal.aborted) return;
       setUser(userPayload.user);
       await checkOnboardingStatus();
     } catch (caughtError) {
+      if (abortController.signal.aborted) return;
       console.error('[Auth] Auth status check failed:', caughtError);
       setError(AUTH_ERROR_MESSAGES.authStatusCheckFailed);
     } finally {
-      setIsLoading(false);
+      if (!abortController.signal.aborted) {
+        setIsLoading(false);
+      }
     }
   }, [checkOnboardingStatus, clearSession, tokenKey, apiClient]);
 

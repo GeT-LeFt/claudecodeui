@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { copyTextToClipboard } from '../../../../utils/clipboard';
 
 type ActionType = 'copy' | 'open-file' | 'jump-to-results' | 'none';
@@ -50,6 +50,8 @@ export const OneLineDisplay: React.FC<OneLineDisplayProps> = ({
   toolId
 }) => {
   const [copied, setCopied] = useState(false);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (copyTimerRef.current) clearTimeout(copyTimerRef.current); }, []);
   const isTerminal = style === 'terminal';
 
   const handleAction = async () => {
@@ -59,7 +61,7 @@ export const OneLineDisplay: React.FC<OneLineDisplayProps> = ({
         return;
       }
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      copyTimerRef.current = setTimeout(() => setCopied(false), 2000);
     } else if (onAction) {
       onAction();
     }

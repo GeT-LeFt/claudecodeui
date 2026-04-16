@@ -1,7 +1,7 @@
 import { Check, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { LLMProvider } from '../../../types/app';
-import { authenticatedFetch } from '../../../utils/api';
+import { useBackendFetch } from '../../../hooks/useBackendApi';
 import { useProviderAuthStatus } from '../../provider-auth/hooks/useProviderAuthStatus';
 import ProviderLoginModal from '../../provider-auth/view/ProviderLoginModal';
 import AgentConnectionsStep from './subcomponents/AgentConnectionsStep';
@@ -17,6 +17,7 @@ type OnboardingProps = {
 };
 
 export default function Onboarding({ onComplete }: OnboardingProps) {
+  const authenticatedFetch = useBackendFetch();
   const [currentStep, setCurrentStep] = useState(0);
   const [gitName, setGitName] = useState('');
   const [gitEmail, setGitEmail] = useState('');

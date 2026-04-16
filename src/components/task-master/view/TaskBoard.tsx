@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { cn } from '../../../lib/utils';
-import { api } from '../../../utils/api';
+import { useBackendApi } from '../../../hooks/useBackendApi';
 import { useTaskMaster } from '../context/TaskMasterContext';
 import { useTaskBoardState } from '../hooks/useTaskBoardState';
 import type { PrdFile, TaskBoardView, TaskMasterProject, TaskMasterTask, TaskSelection } from '../types';
@@ -37,6 +37,7 @@ export default function TaskBoard({
   onRefreshPRDs = null,
 }: TaskBoardProps) {
   const { projectTaskMaster, refreshProjects, refreshTasks, setCurrentProject } = useTaskMaster();
+  const api = useBackendApi();
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);

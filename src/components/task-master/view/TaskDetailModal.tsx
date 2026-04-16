@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 import { copyTextToClipboard } from '../../../utils/clipboard';
-import { api } from '../../../utils/api';
+import { useBackendApi } from '../../../hooks/useBackendApi';
 import { useTaskMaster } from '../context/TaskMasterContext';
 import type { TaskId, TaskMasterTask, TaskReference } from '../types';
 
@@ -64,6 +64,7 @@ export default function TaskDetailModal({
   onTaskClick = null,
 }: TaskDetailModalProps) {
   const { currentProject, refreshTasks } = useTaskMaster();
+  const api = useBackendApi();
 
   const [isEditMode, setIsEditMode] = useState(false);
   const [isSaving, setIsSaving] = useState(false);

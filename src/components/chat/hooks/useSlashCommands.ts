@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, KeyboardEvent, RefObject, SetStateAction } from 'react';
 import Fuse from 'fuse.js';
-import { authenticatedFetch } from '../../../utils/api';
+import { useBackendFetch } from '../../../hooks/useBackendApi';
 import { safeLocalStorage } from '../utils/chatStorage';
 import type { Project } from '../../../types/app';
 
@@ -57,6 +57,7 @@ export function useSlashCommands({
   onExecuteCommand,
   currentSessionId,
 }: UseSlashCommandsOptions) {
+  const authenticatedFetch = useBackendFetch();
   const [slashCommands, setSlashCommands] = useState<SlashCommand[]>([]);
   const [filteredCommands, setFilteredCommands] = useState<SlashCommand[]>([]);
   const [showCommandMenu, setShowCommandMenu] = useState(false);

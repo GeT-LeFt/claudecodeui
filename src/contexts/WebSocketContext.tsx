@@ -21,18 +21,20 @@ export const useWebSocket = () => {
 };
 
 const buildWebSocketUrl = (token: string | null, backendUrl?: string) => {
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  let protocol: string;
   let host: string;
   if (backendUrl) {
-    // Extract host from full URL (e.g., "https://example.com:8080" → "example.com:8080")
     try {
       const parsed = new URL(backendUrl);
       host = parsed.host;
+      protocol = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
     } catch {
       host = window.location.host;
+      protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     }
   } else {
     host = window.location.host;
+    protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   }
   if (IS_PLATFORM) return `${protocol}//${host}/ws`;
   if (!token) return null;
@@ -44,8 +46,12 @@ const useWebSocketProviderState = (): WebSocketContextType => {
   const unmountedRef = useRef(false);
   const hasConnectedRef = useRef(false);
   const connectRef = useRef<() => void>(() => {});
+  const generationRef = useRef(0);
   const [latestMessage, setLatestMessage] = useState<any>(null);
   const [isConnected, setIsConnected] = useState(false);
+  // L6: Reactive WebSocket state — useMemo can't detect ref mutations, so we use state
+  // to ensure the context value updates when the socket instance changes.
+  const [wsInstance, setWsInstance] = useState<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const { token } = useAuth();
   const { activeBackend } = useBackend();
@@ -57,8 +63,14 @@ const useWebSocketProviderState = (): WebSocketContextType => {
       if (wsRef.current) {
         wsRef.current.close();
         wsRef.current = null;
+        setWsInstance(null);
       }
 
+      // L5: Reset hasConnectedRef on new connection so that a backend switch
+      // doesn't incorrectly emit a "websocket-reconnected" message on first open.
+      hasConnectedRef.current = false;
+
+      const generation = ++generationRef.current;
       const wsUrl = buildWebSocketUrl(token, backendUrl);
 
       if (!wsUrl) return console.warn('No authentication token found for WebSocket connection');
@@ -66,8 +78,10 @@ const useWebSocketProviderState = (): WebSocketContextType => {
       const websocket = new WebSocket(wsUrl);
 
       websocket.onopen = () => {
+        if (generation !== generationRef.current) { websocket.close(); return; }
         setIsConnected(true);
         wsRef.current = websocket;
+        setWsInstance(websocket);
         if (hasConnectedRef.current) {
           setLatestMessage({ type: 'websocket-reconnected', timestamp: Date.now() });
         }
@@ -75,6 +89,7 @@ const useWebSocketProviderState = (): WebSocketContextType => {
       };
 
       websocket.onmessage = (event) => {
+        if (generation !== generationRef.current) return;
         try {
           const data = JSON.parse(event.data);
           setLatestMessage(data);
@@ -84,11 +99,13 @@ const useWebSocketProviderState = (): WebSocketContextType => {
       };
 
       websocket.onclose = () => {
+        if (generation !== generationRef.current) return;
         setIsConnected(false);
         wsRef.current = null;
+        setWsInstance(null);
 
         reconnectTimeoutRef.current = setTimeout(() => {
-          if (unmountedRef.current) return;
+          if (unmountedRef.current || generation !== generationRef.current) return;
           connectRef.current();
         }, 3000);
       };
@@ -128,13 +145,15 @@ const useWebSocketProviderState = (): WebSocketContextType => {
     }
   }, []);
 
+  // L6: Use wsInstance (state) instead of wsRef.current so the memo recomputes
+  // when the WebSocket instance changes — ref mutations don't trigger React re-renders.
   const value: WebSocketContextType = useMemo(() =>
   ({
-    ws: wsRef.current,
+    ws: wsInstance,
     sendMessage,
     latestMessage,
     isConnected
-  }), [sendMessage, latestMessage, isConnected]);
+  }), [wsInstance, sendMessage, latestMessage, isConnected]);
 
   return value;
 };

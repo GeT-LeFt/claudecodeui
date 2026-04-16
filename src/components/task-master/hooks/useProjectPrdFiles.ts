@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { api } from '../../../utils/api';
+import { useBackendApi } from '../../../hooks/useBackendApi';
 import type { PrdFile } from '../types';
 
 type UseProjectPrdFilesOptions = {
@@ -24,6 +24,7 @@ function normalizePrdResponse(responseData: PrdResponse): PrdFile[] {
 }
 
 export function useProjectPrdFiles({ projectName }: UseProjectPrdFilesOptions) {
+  const api = useBackendApi();
   const [prdFiles, setPrdFiles] = useState<PrdFile[]>([]);
   const [isLoadingPrdFiles, setIsLoadingPrdFiles] = useState(false);
 

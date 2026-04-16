@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { NavigateFunction } from 'react-router-dom';
-import { api, createApiClient } from '../utils/api';
+import { createApiClient } from '../utils/api';
 import { useBackend } from '../contexts/BackendContext';
 import { getBackendTokenKey } from '../components/auth/constants';
 import type {
@@ -472,7 +472,7 @@ export function useProjectsState({
 
   const handleSidebarRefresh = useCallback(async () => {
     try {
-      const response = await api.projects();
+      const response = await apiClient.projects();
       const freshProjects = (await response.json()) as Project[];
 
       setProjects((prevProjects) =>

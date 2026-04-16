@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { authenticatedFetch } from '../../../utils/api';
+import { useBackendFetch } from '../../../hooks/useBackendApi';
 
 type Props = {
   pluginName: string;
@@ -11,6 +11,7 @@ type Props = {
 const svgCache = new Map<string, string>();
 
 export default function PluginIcon({ pluginName, iconFile, className }: Props) {
+  const authenticatedFetch = useBackendFetch();
   const url = iconFile
     ? `/api/plugins/${encodeURIComponent(pluginName)}/assets/${encodeURIComponent(iconFile)}`
     : '';

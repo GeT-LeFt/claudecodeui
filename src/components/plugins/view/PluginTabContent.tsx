@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { authenticatedFetch } from '../../../utils/api';
+import { useBackendFetch } from '../../../hooks/useBackendApi';
 import { usePlugins } from '../../../contexts/PluginsContext';
 import type { Project, ProjectSession } from '../../../types/app';
 
@@ -46,6 +46,7 @@ export default function PluginTabContent({
   const containerRef = useRef<HTMLDivElement>(null);
   const { isDarkMode } = useTheme();
   const { plugins } = usePlugins();
+  const authenticatedFetch = useBackendFetch();
 
   // Stable refs so effects don't need context values in their dep arrays
   const contextRef = useRef<PluginContext>(buildContext(isDarkMode, selectedProject, selectedSession));

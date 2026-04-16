@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Eye, EyeOff, FolderOpen, FolderPlus, Loader2, Plus, X } from 'lucide-react';
 import { Button, Input } from '../../../shared/view/ui';
 import { browseFilesystemFolders, createFolderInFilesystem } from '../data/workspaceApi';
+import { useBackendApi } from '../../../hooks/useBackendApi';
 import { getParentPath, joinFolderPath } from '../utils/pathUtils';
 import type { FolderSuggestion } from '../types';
 
@@ -26,13 +27,14 @@ export default function FolderBrowserModal({
   const [newFolderName, setNewFolderName] = useState('');
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const apiClient = useBackendApi();
 
   const loadFolders = useCallback(async (pathToLoad: string) => {
     setLoadingFolders(true);
     setError(null);
 
     try {
-      const result = await browseFilesystemFolders(pathToLoad);
+      const result = await browseFilesystemFolders(pathToLoad, apiClient);
       setCurrentPath(result.path);
       setFolders(result.suggestions);
     } catch (loadError) {
@@ -80,7 +82,7 @@ export default function FolderBrowserModal({
 
     try {
       const folderPath = joinFolderPath(currentPath, newFolderName);
-      const createdPath = await createFolderInFilesystem(folderPath);
+      const createdPath = await createFolderInFilesystem(folderPath, apiClient);
       resetNewFolderState();
       await loadFolders(createdPath);
     } catch (createError) {

@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { authenticatedFetch } from '../../../utils/api';
+import { useBackendFetch } from '../../../hooks/useBackendApi';
 import type { LLMProvider } from '../../../types/app';
 import {
   CLI_AUTH_STATUS_ENDPOINTS,
@@ -43,6 +43,7 @@ type UseProviderAuthStatusOptions = {
 export function useProviderAuthStatus(
   { initialLoading = true }: UseProviderAuthStatusOptions = {},
 ) {
+  const authenticatedFetch = useBackendFetch();
   const [providerAuthStatus, setProviderAuthStatus] = useState<ProviderAuthStatusMap>(() => (
     createInitialProviderAuthStatusMap(initialLoading)
   ));

@@ -139,12 +139,6 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
-      - name: Generate build size report
-        run: |
-          npm ci
-          npm run build
-          npm run build:size-report
-
       - name: Build Docker image
         run: |
           echo "=== Dockerfile check ==="
@@ -156,6 +150,16 @@ jobs:
             --label "org.opencontainers.image.revision=${{ github.sha }}" \
             --label "org.opencontainers.image.created=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
             .
+
+      - name: Generate build size report from Docker image
+        run: |
+          npm ci
+          # Extract the built dist from the Docker image rather than rebuilding
+          CONTAINER_ID=$(docker create ${{ secrets.ACR_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }})
+          docker cp "$CONTAINER_ID:/app/dist" ./dist
+          docker cp "$CONTAINER_ID:/app/dist-server" ./dist-server
+          docker rm "$CONTAINER_ID"
+          npm run build:size-report
 
       - name: Upload build size report
         uses: actions/upload-artifact@v4
@@ -202,6 +206,8 @@ jobs:
             set -e
             DEPLOY_ENV="${{ needs.docker-build-push.outputs.deploy-env }}"
             IMAGE="${{ secrets.ACR_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.docker-build-push.outputs.image-tag }}"
+            STAGING_TEST_USER="${{ secrets.STAGING_TEST_USER }}"
+            STAGING_TEST_PASS="${{ secrets.STAGING_TEST_PASS }}"
 
             # Environment-specific configuration
             if [ "$DEPLOY_ENV" = "staging" ]; then
@@ -240,9 +246,9 @@ jobs:
               if curl -sf "http://localhost:$HOST_PORT/health" > /dev/null 2>&1; then
                 echo "[Deploy] Health check passed!"
 
-                # Staging: setup nginx reverse proxy on first deploy
-                if [ "$DEPLOY_ENV" = "staging" ] && [ ! -f /etc/nginx/sites-available/cloudcli-staging ]; then
-                  echo "[Deploy] Creating staging nginx config (8089 HTTP + 8444 HTTPS)..."
+                # Staging: setup/update nginx reverse proxy
+                if [ "$DEPLOY_ENV" = "staging" ]; then
+                  echo "[Deploy] Writing staging nginx config (8089 HTTP + 8444 HTTPS)..."
                   cat > /etc/nginx/sites-available/cloudcli-staging << 'NGINX_CONF'
             server {
                 listen 8089;
@@ -298,11 +304,11 @@ jobs:
                   echo "[Deploy] Registering staging test account..."
                   curl -sf -X POST "http://localhost:$HOST_PORT/api/auth/register" \
                     -H 'Content-Type: application/json' \
-                    -d '{"username":"staging-test","password":"staging-test-2026"}' || echo "[Deploy] Test account already exists, skipping."
+                    -d "{\"username\":\"$STAGING_TEST_USER\",\"password\":\"$STAGING_TEST_PASS\"}" || echo "[Deploy] Test account already exists, skipping."
 
-                  echo "[Deploy] Auto-completing onboarding for staging-test..."
+                  echo "[Deploy] Auto-completing onboarding for staging test user..."
                   sqlite3 "$DATA_DIR/auth.db" \
-                    "UPDATE users SET git_name='staging-test', git_email='staging@test.local', has_completed_onboarding=1 WHERE username='staging-test';" \
+                    "UPDATE users SET git_name='staging-test', git_email='staging@test.local', has_completed_onboarding=1 WHERE username='$STAGING_TEST_USER';" \
                     || echo "[Deploy] Onboarding auto-complete failed, skipping."
                 fi
 

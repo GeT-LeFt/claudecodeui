@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { authenticatedFetch } from "../../../utils/api";
+import { useBackendFetch } from "../../../hooks/useBackendApi";
 import { ReleaseInfo } from "../../../types/sharedTypes";
 import { copyTextToClipboard } from "../../../utils/clipboard";
 import type { InstallMode } from "../../../hooks/useVersionCheck";
@@ -25,6 +25,7 @@ export function VersionUpgradeModal({
     latestVersion,
     installMode
 }: VersionUpgradeModalProps) {
+    const authenticatedFetch = useBackendFetch();
     const { t } = useTranslation('common');
     const upgradeCommand = installMode === 'npm'
         ? t('versionUpdate.npmUpgradeCommand')

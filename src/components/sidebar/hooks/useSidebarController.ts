@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import type { TFunction } from 'i18next';
-import { api } from '../../../utils/api';
+import { useBackendApi } from '../../../hooks/useBackendApi';
 import type { Project, ProjectSession, LLMProvider } from '../../../types/app';
 import type {
   AdditionalSessionsByProject,
@@ -119,6 +119,7 @@ export function useSidebarController({
   const eventSourceRef = useRef<EventSource | null>(null);
 
   const isSidebarCollapsed = !isMobile && !sidebarVisible;
+  const api = useBackendApi();
 
   useEffect(() => {
     const timer = setInterval(() => {

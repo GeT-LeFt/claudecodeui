@@ -97,6 +97,9 @@ export const api = {
     authenticatedFetch(`/api/projects/${projectName}${force ? '?force=true' : ''}`, {
       method: 'DELETE',
     }),
+  // L1: Token is passed via URL query because EventSource (SSE) cannot send custom headers.
+  // This means the token may appear in browser history and server logs.
+  // Callers should prefer createApiClient() which uses the backend-specific tokenKey.
   searchConversationsUrl: (query, limit = 50) => {
     const token = localStorage.getItem('auth-token');
     const params = new URLSearchParams({ q: query, limit: String(limit) });

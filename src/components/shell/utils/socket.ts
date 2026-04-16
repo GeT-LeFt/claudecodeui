@@ -2,18 +2,20 @@ import { IS_PLATFORM } from '../../../constants/config';
 import type { ShellIncomingMessage, ShellOutgoingMessage } from '../types/types';
 
 export function getShellWebSocketUrl(backendUrl?: string, tokenKey?: string): string | null {
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-
+  let protocol: string;
   let host: string;
   if (backendUrl) {
     try {
       const parsed = new URL(backendUrl);
       host = parsed.host;
+      protocol = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
     } catch {
       host = window.location.host;
+      protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     }
   } else {
     host = window.location.host;
+    protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   }
 
   if (IS_PLATFORM) {

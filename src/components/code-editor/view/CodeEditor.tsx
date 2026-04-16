@@ -1,8 +1,10 @@
 import { EditorView } from '@codemirror/view';
 import { unifiedMergeView } from '@codemirror/merge';
 import type { Extension } from '@codemirror/state';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+import { useBackendFetch } from '../../../hooks/useBackendApi';
 import { useCodeEditorDocument } from '../hooks/useCodeEditorDocument';
 import { useCodeEditorSettings } from '../hooks/useCodeEditorSettings';
 import { useEditorKeyboardShortcuts } from '../hooks/useEditorKeyboardShortcuts';
@@ -36,6 +38,7 @@ export default function CodeEditor({
   onPopOut = null,
 }: CodeEditorProps) {
   const { t } = useTranslation('codeEditor');
+  const backendFetch = useBackendFetch();
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showDiff, setShowDiff] = useState(Boolean(file.diffInfo));
   const [markdownPreview, setMarkdownPreview] = useState(false);
@@ -152,28 +155,34 @@ export default function CodeEditor({
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageError, setImageError] = useState(false);
 
+  const objectUrlRef = useRef<string | null>(null);
   useEffect(() => {
     if (!isImageFile || !file.projectName) return;
-    let objectUrl: string | null = null;
     const controller = new AbortController();
 
     const loadImage = async () => {
       try {
-        const { authenticatedFetch } = await import('../../../utils/api');
-        const response = await authenticatedFetch(
+        const response = await backendFetch(
           `/api/projects/${file.projectName}/files/content?path=${encodeURIComponent(file.path)}`,
           { signal: controller.signal },
         );
         if (!response.ok) throw new Error('Failed to load');
         const blob = await response.blob();
-        objectUrl = URL.createObjectURL(blob);
-        setImageUrl(objectUrl);
+        const url = URL.createObjectURL(blob);
+        objectUrlRef.current = url;
+        setImageUrl(url);
       } catch (e: any) {
         if (e?.name !== 'AbortError') setImageError(true);
       }
     };
     loadImage();
-    return () => { controller.abort(); if (objectUrl) URL.revokeObjectURL(objectUrl); };
+    return () => {
+      controller.abort();
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+        objectUrlRef.current = null;
+      }
+    };
   }, [isImageFile, file.projectName, file.path]);
 
   useEditorKeyboardShortcuts({
@@ -181,6 +190,21 @@ export default function CodeEditor({
     onClose,
     dependency: content,
   });
+
+  // Escape key handler + body scroll lock for non-sidebar image modal
+  // (must be before any conditional returns to satisfy rules-of-hooks)
+  useEffect(() => {
+    if (isSidebar || !isImageFile) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = '';
+    };
+  }, [isSidebar, isImageFile, onClose]);
 
   if (loading) {
     return (
@@ -229,8 +253,15 @@ export default function CodeEditor({
       );
     }
 
-    return (
-      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 md:p-4">
+    return createPortal(
+      <div
+        className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 md:p-4"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Image preview: ${file.name}`}
+        onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+        onKeyDown={() => {}}
+      >
         <div className="flex h-full w-full flex-col bg-background shadow-2xl md:max-h-[80vh] md:max-w-4xl md:rounded-lg">
           <div className="flex flex-shrink-0 items-center justify-between border-b border-border px-3 py-1.5">
             <h3 className="truncate text-sm font-medium text-gray-900 dark:text-white">{file.name}</h3>
@@ -240,7 +271,7 @@ export default function CodeEditor({
                   <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
                 </button>
               )}
-              <button type="button" onClick={onClose} className="rounded-md p-1.5 text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800" title="Close">
+              <button type="button" onClick={onClose} className="rounded-md p-1.5 text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800" title="Close" aria-label="Close image preview">
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
@@ -250,7 +281,8 @@ export default function CodeEditor({
             <p className="truncate text-xs text-gray-500 dark:text-gray-400">{file.path}</p>
           </div>
         </div>
-      </div>
+      </div>,
+      document.body,
     );
   }
 

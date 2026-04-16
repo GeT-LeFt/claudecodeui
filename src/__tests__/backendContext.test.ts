@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Stub window.location.origin for getBackendTokenKey
 vi.stubGlobal('window', { location: { origin: 'https://47.113.190.177:8444' } });
 
-const { getBackendTokenKey } = await import('../contexts/BackendContext');
+const { getBackendTokenKey } = await import('../components/auth/constants');
 
 describe('getBackendTokenKey – token isolation between backends', () => {
   beforeEach(() => {

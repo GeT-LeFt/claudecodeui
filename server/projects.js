@@ -1062,8 +1062,21 @@ async function getSessionMessages(projectName, sessionId, limit = null, offset =
 
     // Apply pagination - for recent messages, we need to slice from the end
     // offset 0 should give us the most recent messages
-    const startIndex = Math.max(0, total - offset - limit);
+    let startIndex = Math.max(0, total - offset - limit);
     const endIndex = total - offset;
+
+    // L10: Expand startIndex backwards to avoid splitting tool_use / tool_result pairs.
+    // A tool_result (role=user with tool_result content) that immediately precedes the
+    // page boundary belongs to a tool_use inside the page — include it.
+    while (startIndex > 0) {
+      const prev = sortedMessages[startIndex - 1];
+      const isToolResult = prev.message?.role === 'user'
+        && Array.isArray(prev.message?.content)
+        && prev.message.content.some(p => p.type === 'tool_result');
+      if (!isToolResult) break;
+      startIndex--;
+    }
+
     const paginatedMessages = sortedMessages.slice(startIndex, endIndex);
     const hasMore = startIndex > 0;
 

@@ -1,4 +1,5 @@
-import { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
+import { AUTH_TOKEN_STORAGE_KEY, getBackendTokenKey } from '../components/auth/constants';
 
 // ────────────────────── Types ──────────────────────
 
@@ -14,12 +15,15 @@ type BackendContextValue = {
   switchBackend: (id: string) => void;
   getBaseUrl: () => string;
   getAuthTokenKey: () => string;
+  /** Monotonically increasing counter; increments on every switchBackend call.
+   *  Components can snapshot this value before an async operation and compare
+   *  afterwards to detect (and discard) stale responses from a previous backend. */
+  backendVersion: number;
 };
 
 // ────────────────────── Constants ──────────────────────
 
 const ACTIVE_BACKEND_STORAGE_KEY = 'active-backend-id';
-const AUTH_TOKEN_STORAGE_KEY = 'auth-token';
 
 // Pre-configured environments — no manual setup needed
 // 'current' uses same-origin (empty URL) so API calls follow the page's own URL.
@@ -75,15 +79,6 @@ migrateBackendStorage();
 
 // ────────────────────── Helpers ──────────────────────
 
-export const getBackendTokenKey = (backendUrl: string): string => {
-  if (!backendUrl) return AUTH_TOKEN_STORAGE_KEY;
-  try {
-    const backendOrigin = new URL(backendUrl).origin;
-    if (backendOrigin === window.location.origin) return AUTH_TOKEN_STORAGE_KEY;
-  } catch { /* invalid URL, treat as remote */ }
-  return `${AUTH_TOKEN_STORAGE_KEY}::${backendUrl}`;
-};
-
 const isLocalDev = (): boolean => {
   if (typeof window === 'undefined') return false;
   const host = window.location.hostname;
@@ -121,6 +116,9 @@ export function useBackend(): BackendContextValue {
 
 export function BackendProvider({ children }: { children: React.ReactNode }) {
   const [activeBackendId, setActiveBackendId] = useState<string>(loadActiveBackendId);
+  // L4: Monotonic counter so consumers can detect stale in-flight responses after a backend switch.
+  const backendVersionRef = useRef(0);
+  const [backendVersion, setBackendVersion] = useState(0);
 
   const activeBackend = useMemo(
     () => PRESET_BACKENDS.find((b) => b.id === activeBackendId) || PRESET_BACKENDS[0],
@@ -133,6 +131,9 @@ export function BackendProvider({ children }: { children: React.ReactNode }) {
       if (PRESET_BACKENDS.some((b) => b.id === id)) {
         setActiveBackendId(id);
         saveActiveBackendId(id);
+        // L4: Bump version so consumers can discard stale responses from the previous backend.
+        backendVersionRef.current += 1;
+        setBackendVersion(backendVersionRef.current);
       }
     },
     [],
@@ -145,6 +146,8 @@ export function BackendProvider({ children }: { children: React.ReactNode }) {
     [activeBackend],
   );
 
+  // L2: isLocalDev() depends on window.location.hostname which never changes during a session,
+  // so the empty dependency array is intentionally correct here.
   const visibleBackends = useMemo(
     () => isLocalDev() ? PRESET_BACKENDS : PRESET_BACKENDS.filter((b) => b.id !== 'local'),
     [],
@@ -157,8 +160,9 @@ export function BackendProvider({ children }: { children: React.ReactNode }) {
       switchBackend,
       getBaseUrl,
       getAuthTokenKey,
+      backendVersion,
     }),
-    [visibleBackends, activeBackend, switchBackend, getBaseUrl, getAuthTokenKey],
+    [visibleBackends, activeBackend, switchBackend, getBaseUrl, getAuthTokenKey, backendVersion],
   );
 
   return <BackendContext.Provider value={contextValue}>{children}</BackendContext.Provider>;

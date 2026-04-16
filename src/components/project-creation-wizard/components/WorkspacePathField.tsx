@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { FolderOpen } from 'lucide-react';
 import { Button, Input } from '../../../shared/view/ui';
 import { browseFilesystemFolders } from '../data/workspaceApi';
+import { useBackendApi } from '../../../hooks/useBackendApi';
 import { getSuggestionRootPath } from '../utils/pathUtils';
 import type { FolderSuggestion, WorkspaceType } from '../types';
 import FolderBrowserModal from './FolderBrowserModal';
@@ -24,6 +25,7 @@ export default function WorkspacePathField({
   const [pathSuggestions, setPathSuggestions] = useState<FolderSuggestion[]>([]);
   const [showPathDropdown, setShowPathDropdown] = useState(false);
   const [showFolderBrowser, setShowFolderBrowser] = useState(false);
+  const apiClient = useBackendApi();
 
   useEffect(() => {
     if (value.trim().length <= 2) {
@@ -36,7 +38,7 @@ export default function WorkspacePathField({
     const timerId = window.setTimeout(async () => {
       try {
         const directoryPath = getSuggestionRootPath(value);
-        const result = await browseFilesystemFolders(directoryPath);
+        const result = await browseFilesystemFolders(directoryPath, apiClient);
         const normalizedInput = value.toLowerCase();
 
         const matchingSuggestions = result.suggestions

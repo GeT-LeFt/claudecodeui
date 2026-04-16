@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api } from '../../../utils/api';
+import { useBackendApi } from '../../../hooks/useBackendApi';
 import type { Project } from '../../../types/app';
 import type { FileTreeNode } from '../types/types';
 
@@ -10,6 +10,7 @@ type UseFileTreeDataResult = {
 };
 
 export function useFileTreeData(selectedProject: Project | null): UseFileTreeDataResult {
+  const api = useBackendApi();
   const [files, setFiles] = useState<FileTreeNode[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);

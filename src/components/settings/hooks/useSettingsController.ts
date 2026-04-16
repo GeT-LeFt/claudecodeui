@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { authenticatedFetch } from '../../../utils/api';
+import { useBackendFetch } from '../../../hooks/useBackendApi';
 import { useProviderAuthStatus } from '../../provider-auth/hooks/useProviderAuthStatus';
 import {
   DEFAULT_CODE_EDITOR_SETTINGS,
@@ -179,6 +179,7 @@ const createDefaultNotificationPreferences = (): NotificationPreferencesState =>
 });
 
 export function useSettingsController({ isOpen, initialTab }: UseSettingsControllerArgs) {
+  const authenticatedFetch = useBackendFetch();
   const { isDarkMode, toggleDarkMode } = useTheme() as ThemeContextValue;
   const closeTimerRef = useRef<number | null>(null);
 

@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { authenticatedFetch } from '../../../utils/api';
+import { useBackendFetch } from '../../../hooks/useBackendApi';
 import type { GitOperationResponse } from '../types/types';
 
 type UseRevertLocalCommitOptions = {
@@ -12,6 +12,7 @@ async function readJson<T>(response: Response): Promise<T> {
 }
 
 export function useRevertLocalCommit({ projectName, onSuccess }: UseRevertLocalCommitOptions) {
+  const authenticatedFetch = useBackendFetch();
   const [isRevertingLocalCommit, setIsRevertingLocalCommit] = useState(false);
 
   const revertLatestLocalCommit = useCallback(async () => {

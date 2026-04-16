@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
@@ -24,6 +24,8 @@ type CodeBlockProps = {
 const CodeBlock = ({ node, inline, className, children, ...props }: CodeBlockProps) => {
   const { t } = useTranslation('chat');
   const [copied, setCopied] = useState(false);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (copyTimerRef.current) clearTimeout(copyTimerRef.current); }, []);
   const raw = Array.isArray(children) ? children.join('') : String(children ?? '');
   const looksMultiline = /[\r\n]/.test(raw);
   const inlineDetected = inline || (node && node.type === 'inlineCode');
@@ -56,7 +58,7 @@ const CodeBlock = ({ node, inline, className, children, ...props }: CodeBlockPro
           copyTextToClipboard(raw).then((success) => {
             if (success) {
               setCopied(true);
-              setTimeout(() => setCopied(false), 2000);
+              copyTimerRef.current = setTimeout(() => setCopied(false), 2000);
             }
           })
         }
@@ -181,12 +183,13 @@ export function Markdown({ children, className }: MarkdownProps) {
 
   return (
     <div className={className}>
-      {parts.map((part, i) => {
+      {parts.map((part) => {
+        const partKey = `${part.type}-${part.content.slice(0, 40)}`;
         if (part.type === 'image') {
           // output_image content is typically a description, not actual image data
           // Show as a placeholder indicating an image was read
           return (
-            <div key={i} className="my-2 flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/50">
+            <div key={partKey} className="my-2 flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/50">
               <svg className="h-5 w-5 flex-shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
@@ -197,7 +200,7 @@ export function Markdown({ children, className }: MarkdownProps) {
         const text = part.content.trim();
         if (!text) return null;
         return (
-          <ReactMarkdown key={i} remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} components={markdownComponents as any}>
+          <ReactMarkdown key={partKey} remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} components={markdownComponents as any}>
             {text}
           </ReactMarkdown>
         );

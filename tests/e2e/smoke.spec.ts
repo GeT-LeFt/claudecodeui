@@ -478,4 +478,117 @@ test.describe('Smoke tests — system notification rendering', () => {
     const blueDot = page.locator('span.rounded-full.bg-blue-400');
     expect(await blueDot.count()).toBeGreaterThanOrEqual(1);
   });
+
+  // ── L11: React key stability — no duplicate key warnings ─────────────
+  test('markdown rendering produces no React key warnings (L11)', async ({ page }) => {
+    await selectProjectAndNewSession(page);
+
+    const textarea = page.locator('textarea').first();
+    await expect(textarea).toBeVisible({ timeout: 8000 });
+
+    // Collect console warnings during test
+    const warnings: string[] = [];
+    page.on('console', (msg) => {
+      if (msg.type() === 'warning' || msg.type() === 'error') {
+        warnings.push(msg.text());
+      }
+    });
+
+    // Send a message to activate the chat view
+    await textarea.fill('show me a code example');
+    await page.locator('button[type="submit"]').first().click();
+    await page.waitForTimeout(3000);
+
+    // Wait for WS interceptor
+    const wsReady = await page.waitForFunction(
+      () => typeof (window as any).__injectWsMessage === 'function',
+      { timeout: 10_000 },
+    ).then(() => true).catch(() => false);
+
+    if (!wsReady) {
+      console.log('WebSocket not captured, skipping L11 test');
+      return;
+    }
+
+    // Inject a message with markdown containing output_image tags (exercises partKey)
+    await page.evaluate(() => {
+      (window as any).__injectWsMessage(JSON.stringify({
+        id: 'l11-test-' + Date.now(),
+        sessionId: '',
+        timestamp: new Date().toISOString(),
+        provider: 'claude',
+        kind: 'text',
+        role: 'assistant',
+        content: 'Here is some text\n\n<output_image>test image</output_image>\n\nAnd more text after the image.',
+      }));
+    });
+
+    await page.waitForTimeout(2000);
+
+    // Verify no React key warnings in console
+    const keyWarnings = warnings.filter(w =>
+      w.includes('key') && (w.includes('duplicate') || w.includes('unique') || w.includes('Each child')),
+    );
+    expect(keyWarnings).toHaveLength(0);
+  });
+
+  // ── L12: setTimeout cleanup — no setState-after-unmount errors ───────
+  test('copy button timer does not cause errors after navigation (L12)', async ({ page }) => {
+    await selectProjectAndNewSession(page);
+
+    const textarea = page.locator('textarea').first();
+    await expect(textarea).toBeVisible({ timeout: 8000 });
+
+    // Collect page errors during test
+    const errors: string[] = [];
+    page.on('pageerror', (err) => { errors.push(err.message); });
+
+    // Wait for WS interceptor
+    const wsReady = await page.waitForFunction(
+      () => typeof (window as any).__injectWsMessage === 'function',
+      { timeout: 10_000 },
+    ).then(() => true).catch(() => false);
+
+    if (!wsReady) {
+      console.log('WebSocket not captured, skipping L12 test');
+      return;
+    }
+
+    // Inject a message with a code block
+    await page.evaluate(() => {
+      (window as any).__injectWsMessage(JSON.stringify({
+        id: 'l12-test-' + Date.now(),
+        sessionId: '',
+        timestamp: new Date().toISOString(),
+        provider: 'claude',
+        kind: 'text',
+        role: 'assistant',
+        content: 'Here is code:\n\n```js\nconsole.log("hello world");\n```\n',
+      }));
+    });
+
+    await page.waitForTimeout(2000);
+
+    // Try to find and click a copy button inside a code block
+    const copyBtn = page.locator('button[title*="Copy"], button[aria-label*="Copy"], button[title*="copy"], button[aria-label*="copy"]').first();
+    const hasCopy = await copyBtn.isVisible({ timeout: 3000 }).catch(() => false);
+    if (hasCopy) {
+      await copyBtn.click();
+
+      // Immediately switch to Shell tab (unmounts the chat message component)
+      const shellTab = page.getByRole('tab', { name: /shell/i }).first();
+      const hasShell = await shellTab.isVisible({ timeout: 2000 }).catch(() => false);
+      if (hasShell) {
+        await shellTab.click();
+        // Wait longer than the 2s setTimeout
+        await page.waitForTimeout(3000);
+      }
+    }
+
+    // Verify: no "setState on unmounted" or similar errors occurred
+    const stateErrors = errors.filter(e =>
+      e.includes('unmounted') || e.includes('setState') || e.includes('memory leak'),
+    );
+    expect(stateErrors).toHaveLength(0);
+  });
 });

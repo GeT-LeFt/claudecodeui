@@ -128,6 +128,12 @@ export function useShellConnection({
 
         connectingRef.current = true;
 
+        // Close existing socket before creating a new one to prevent leaks
+        if (wsRef.current) {
+          wsRef.current.close();
+          wsRef.current = null;
+        }
+
         const socket = new WebSocket(wsUrl);
         wsRef.current = socket;
 
@@ -228,6 +234,18 @@ export function useShellConnection({
 
     connectToShell();
   }, [autoConnect, connectToShell, isConnected, isConnecting, isInitialized]);
+
+  // Reconnect when backend changes
+  const prevBackendUrlRef = useRef(backendUrl);
+  useEffect(() => {
+    if (prevBackendUrlRef.current !== backendUrl) {
+      prevBackendUrlRef.current = backendUrl;
+      if (isConnected || isConnecting) {
+        disconnectFromShell();
+        setTimeout(() => connectToShell(), 0);
+      }
+    }
+  }, [backendUrl, isConnected, isConnecting, disconnectFromShell, connectToShell]);
 
   return {
     isConnected,

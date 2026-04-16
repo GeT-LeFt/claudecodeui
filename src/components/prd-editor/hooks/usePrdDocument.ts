@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { api } from '../../../utils/api';
+import { useBackendApi } from '../../../hooks/useBackendApi';
 import { PRD_TEMPLATE } from '../constants';
 import type { PrdFile } from '../types';
 import { createDefaultPrdName, sanitizeFileName, stripPrdExtension } from '../utils/fileName';
@@ -30,6 +30,7 @@ export function usePrdDocument({
   const [fileName, setFileNameState] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(!isNewFile);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const api = useBackendApi();
 
   const setFileName = useCallback((nextFileName: string) => {
     setFileNameState(sanitizeFileName(nextFileName));

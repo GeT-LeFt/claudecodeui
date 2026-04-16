@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { Button } from '../../../shared/view/ui';
-import { authenticatedFetch } from '../../../utils/api';
+import { useBackendFetch } from '../../../hooks/useBackendApi';
 import type { FileTreeImageSelection } from '../types/types';
 
 type ImageViewerProps = {
@@ -10,6 +10,7 @@ type ImageViewerProps = {
 };
 
 export default function ImageViewer({ file, onClose }: ImageViewerProps) {
+  const authenticatedFetch = useBackendFetch();
   const imagePath = `/api/projects/${file.projectName}/files/content?path=${encodeURIComponent(file.path)}`;
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);

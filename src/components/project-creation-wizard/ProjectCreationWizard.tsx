@@ -9,6 +9,7 @@ import WizardFooter from './components/WizardFooter';
 import WizardProgress from './components/WizardProgress';
 import { useGithubTokens } from './hooks/useGithubTokens';
 import { cloneWorkspaceWithProgress, createWorkspaceRequest } from './data/workspaceApi';
+import { useBackendApi, useBackendOpts } from '../../hooks/useBackendApi';
 import { isCloneWorkflow, shouldShowGithubAuthentication } from './utils/pathUtils';
 import type { TokenMode, WizardFormState, WizardStep, WorkspaceType } from './types';
 
@@ -36,6 +37,8 @@ export default function ProjectCreationWizard({
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cloneProgress, setCloneProgress] = useState('');
+  const apiClient = useBackendApi();
+  const backendOpts = useBackendOpts();
 
   const shouldLoadTokens =
     step === 2 && shouldShowGithubAuthentication(formState.workspaceType, formState.githubUrl);
@@ -116,6 +119,7 @@ export default function ProjectCreationWizard({
           {
             onProgress: setCloneProgress,
           },
+          backendOpts,
         );
 
         onProjectCreated?.(project);
@@ -126,7 +130,7 @@ export default function ProjectCreationWizard({
       const project = await createWorkspaceRequest({
         workspaceType: formState.workspaceType,
         path: formState.workspacePath.trim(),
-      });
+      }, apiClient);
 
       onProjectCreated?.(project);
       onClose();

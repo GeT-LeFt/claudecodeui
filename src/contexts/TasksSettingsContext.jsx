@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { api } from '../utils/api';
+import { useBackendApi } from '../hooks/useBackendApi';
 
 const TasksSettingsContext = createContext({
   tasksEnabled: true,
@@ -20,6 +20,7 @@ export const useTasksSettings = () => {
 };
 
 export const TasksSettingsProvider = ({ children }) => {
+  const api = useBackendApi();
   const [tasksEnabled, setTasksEnabled] = useState(() => {
     // Load from localStorage on initialization
     const saved = localStorage.getItem('tasks-enabled');
