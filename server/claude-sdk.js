@@ -299,8 +299,9 @@ function extractTokenBudget(resultMessage) {
   const cacheReadTokens = modelData.cumulativeCacheReadInputTokens || modelData.cacheReadInputTokens || 0;
   const cacheCreationTokens = modelData.cumulativeCacheCreationInputTokens || modelData.cacheCreationInputTokens || 0;
 
-  // Total used = input + output + cache tokens
-  const totalUsed = inputTokens + outputTokens + cacheReadTokens + cacheCreationTokens;
+  // Total used = input + output (input already includes cache read/creation tokens in Anthropic API)
+  // Cache tokens are tracked separately for display purposes only
+  const totalUsed = inputTokens + outputTokens;
 
   // Use configured context window budget from environment (default 160000)
   // This is the user's budget limit, not the model's context window
@@ -379,12 +380,6 @@ async function handleImages(command, images, cwd) {
  */
 async function cleanupTempFiles(tempImagePaths, tempDir) {
   if (!tempImagePaths || tempImagePaths.length === 0) {
-    return;
-  }
-
-  // Keep images under .tmp/images/ in project directory for history rendering
-  const isProjectImages = tempDir && tempDir.includes(path.join('.tmp', 'images'));
-  if (isProjectImages) {
     return;
   }
 
@@ -479,6 +474,7 @@ async function queryClaudeSDK(command, options = {}, ws) {
   let sessionCreatedSent = false;
   let tempImagePaths = [];
   let tempDir = null;
+  let lastCompactSummary = '';
 
   const emitNotification = (event) => {
     notifyUserIfEnabled({
@@ -519,6 +515,13 @@ async function queryClaudeSDK(command, options = {}, ws) {
             requiresUserAction: true,
             dedupeKey: `claude:hook:notification:${capturedSessionId || sessionId || 'none'}:${message}`
           }));
+          return {};
+        }]
+      }],
+      PostCompact: [{
+        matcher: '',
+        hooks: [async (input) => {
+          lastCompactSummary = input?.compact_summary || '';
           return {};
         }]
       }]
@@ -657,6 +660,11 @@ async function queryClaudeSDK(command, options = {}, ws) {
       const systemResult = handleSystemMessage(message, sid);
       if (systemResult) {
         if (systemResult !== 'skip') {
+          // Attach compact summary from PostCompact hook if this is a compaction notification
+          if (systemResult.notificationType === 'compaction' && lastCompactSummary) {
+            systemResult.summary = lastCompactSummary;
+            lastCompactSummary = '';
+          }
           ws.send(systemResult);
         }
         continue;

@@ -177,6 +177,7 @@ export function normalizedToChatMessages(messages: NormalizedMessage[]): ChatMes
           timestamp: msg.timestamp,
           isSystemNotification: true,
           notificationType: msg.notificationType || 'info',
+          summary: msg.summary || '',
         });
         break;
 

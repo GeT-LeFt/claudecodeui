@@ -97,6 +97,10 @@ export function normalizeMessage(raw, sessionId) {
 
   // Compact boundary marker (system event written to JSONL after compaction)
   if (raw.type === 'system' && raw.subtype === 'compact_boundary') {
+    const meta = raw.compact_metadata || {};
+    const summary = meta.pre_tokens && meta.post_tokens
+      ? `Compressed from ${meta.pre_tokens.toLocaleString()} to ${meta.post_tokens.toLocaleString()} tokens (${meta.trigger || 'auto'})`
+      : '';
     messages.push(createNormalizedMessage({
       id: raw.uuid || baseId,
       sessionId,
@@ -105,6 +109,7 @@ export function normalizeMessage(raw, sessionId) {
       kind: 'system_notification',
       content: 'Conversation compacted',
       notificationType: 'compaction',
+      summary,
     }));
     return messages;
   }
@@ -118,10 +123,13 @@ export function normalizeMessage(raw, sessionId) {
           // Handle array content in tool_result (standard Anthropic format with images/text blocks)
           let resultContent;
           if (Array.isArray(part.content)) {
-            resultContent = part.content
+            const textParts = part.content
               .filter(block => block.type === 'text')
-              .map(block => block.text)
-              .join('\n') || JSON.stringify(part.content);
+              .map(block => block.text);
+            const imageParts = part.content
+              .filter(block => block.type === 'image')
+              .map(block => `[Image: ${block.source?.media_type || 'image'}]`);
+            resultContent = [...textParts, ...imageParts].join('\n') || JSON.stringify(part.content);
           } else {
             resultContent = typeof part.content === 'string' ? part.content : JSON.stringify(part.content);
           }

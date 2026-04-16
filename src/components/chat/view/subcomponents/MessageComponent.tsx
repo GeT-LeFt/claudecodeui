@@ -102,7 +102,10 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, o
     };
   }, [autoExpandTools, isExpanded, message.isToolUse]);
 
-  const formattedTime = useMemo(() => new Date(message.timestamp).toLocaleTimeString(), [message.timestamp]);
+  const formattedTime = useMemo(() => {
+    const d = new Date(message.timestamp);
+    return isNaN(d.getTime()) ? '' : d.toLocaleTimeString();
+  }, [message.timestamp]);
   const shouldHideThinkingMessage = Boolean(message.isThinking && !showThinking);
 
   if (shouldHideThinkingMessage) {
@@ -159,10 +162,25 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, o
       ) : message.isSystemNotification ? (
         /* Compact system notification (e.g., conversation compacted) */
         <div className="w-full">
-          <div className="flex items-center gap-2 py-0.5">
-            <span className="inline-block h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-400 dark:bg-blue-500" />
-            <span className="text-xs text-gray-500 dark:text-gray-400">{message.content}</span>
-          </div>
+          {message.summary ? (
+            <details className="group/compact">
+              <summary className="flex cursor-pointer select-none items-center gap-2 py-0.5 text-xs">
+                <span className="inline-block h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-400 dark:bg-blue-500" />
+                <span className="text-gray-500 dark:text-gray-400">{message.content}</span>
+                <svg className="h-3 w-3 flex-shrink-0 text-gray-400 transition-transform duration-150 group-open/compact:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </summary>
+              <div className="ml-3.5 mt-1 max-h-64 overflow-y-auto whitespace-pre-wrap rounded border border-border bg-muted/30 p-2 text-xs text-gray-600 dark:text-gray-300">
+                {String(message.summary)}
+              </div>
+            </details>
+          ) : (
+            <div className="flex items-center gap-2 py-0.5">
+              <span className="inline-block h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-400 dark:bg-blue-500" />
+              <span className="text-xs text-gray-500 dark:text-gray-400">{message.content}</span>
+            </div>
+          )}
         </div>
       ) : (
         /* Claude/Error/Tool messages on the left */
