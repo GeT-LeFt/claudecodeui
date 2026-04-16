@@ -19,8 +19,17 @@ const TEST_PASS = process.env.TEST_PASSWORD || 'staging-test-2026';
 // Allow self-signed certs (staging uses self-signed SSL)
 test.use({ ignoreHTTPSErrors: true });
 
+// Helper: ensure test account exists (register if needed, ignore if already exists)
+async function ensureTestAccount(page: import('@playwright/test').Page) {
+  await page.request.post(`${BASE}/api/auth/register`, {
+    data: { username: TEST_USER, password: TEST_PASS },
+  }).catch(() => {}); // ignore errors (account may already exist)
+}
+
 // Helper: login via API + inject token into localStorage
 async function loginViaApi(page: import('@playwright/test').Page) {
+  await ensureTestAccount(page);
+
   const res = await page.request.post(`${BASE}/api/auth/login`, {
     data: { username: TEST_USER, password: TEST_PASS },
   });
