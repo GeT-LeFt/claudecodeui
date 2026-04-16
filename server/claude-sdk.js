@@ -652,16 +652,116 @@ async function queryClaudeSDK(command, options = {}, ws) {
         // session_id already captured
       }
 
-      // Handle SDK system messages (e.g., compaction status) before adapter normalization
-      if (message.type === 'system' && message.subtype === 'status' && message.compact_result) {
-        const sid = capturedSessionId || sessionId || null;
+      // ── Handle SDK system/control messages before adapter normalization ────
+      // The adapter's normalizeMessage() returns [] for all system subtypes,
+      // so we intercept them here and emit the appropriate frontend messages.
+      const sid = capturedSessionId || sessionId || null;
+
+      // 1. Status messages: compaction result, compacting/requesting progress, status cleared
+      if (message.type === 'system' && message.subtype === 'status') {
+        if (message.compact_result) {
+          ws.send(createNormalizedMessage({
+            kind: 'system_notification',
+            content: message.compact_result === 'success' ? 'Conversation compacted' : 'Conversation compaction failed',
+            notificationType: 'compaction',
+            sessionId: sid,
+            provider: 'claude'
+          }));
+        } else if (message.status === 'compacting') {
+          ws.send(createNormalizedMessage({
+            kind: 'status',
+            text: 'Compacting conversation',
+            canInterrupt: false,
+            sessionId: sid,
+            provider: 'claude'
+          }));
+        } else if (message.status === 'requesting') {
+          ws.send(createNormalizedMessage({
+            kind: 'status',
+            text: 'Requesting',
+            canInterrupt: true,
+            sessionId: sid,
+            provider: 'claude'
+          }));
+        } else if (message.status === null) {
+          ws.send(createNormalizedMessage({
+            kind: 'status',
+            sessionId: sid,
+            provider: 'claude'
+          }));
+        }
+        continue;
+      }
+
+      // 2. API retry — show inline notification with attempt info
+      if (message.type === 'system' && message.subtype === 'api_retry') {
+        const delaySec = Math.round((message.retry_delay_ms || 0) / 1000);
         ws.send(createNormalizedMessage({
           kind: 'system_notification',
-          content: message.compact_result === 'success' ? 'Conversation compacted' : 'Conversation compaction failed',
-          notificationType: 'compaction',
+          content: `API retry (attempt ${message.attempt || '?'}/${message.max_retries || '?'}, retrying in ${delaySec}s)`,
+          notificationType: 'api_retry',
           sessionId: sid,
           provider: 'claude'
         }));
+        continue;
+      }
+
+      // 3. Rate limit events — warn on approaching/rejected, suppress 'allowed'
+      if (message.type === 'rate_limit_event') {
+        const info = message.rate_limit_info || {};
+        let content;
+        if (info.status === 'rejected') {
+          const resetTime = info.resetsAt ? new Date(info.resetsAt * 1000).toLocaleTimeString() : 'soon';
+          content = `Rate limited — resets at ${resetTime}`;
+        } else if (info.status === 'allowed_warning') {
+          const pct = info.utilization != null ? Math.round(info.utilization * 100) : null;
+          content = pct != null ? `Approaching rate limit (${pct}% used)` : 'Approaching rate limit';
+        } else {
+          continue; // 'allowed' — no notification needed
+        }
+        ws.send(createNormalizedMessage({
+          kind: 'system_notification',
+          content,
+          notificationType: 'rate_limit',
+          sessionId: sid,
+          provider: 'claude'
+        }));
+        continue;
+      }
+
+      // 4. General SDK notifications
+      if (message.type === 'system' && message.subtype === 'notification') {
+        ws.send(createNormalizedMessage({
+          kind: 'system_notification',
+          content: message.text || 'Notification',
+          notificationType: 'notification',
+          sessionId: sid,
+          provider: 'claude'
+        }));
+        continue;
+      }
+
+      // 5. Local command output (e.g. /cost, /voice)
+      if (message.type === 'system' && message.subtype === 'local_command_output') {
+        ws.send(createNormalizedMessage({
+          kind: 'system_notification',
+          content: message.content || '',
+          notificationType: 'command_output',
+          sessionId: sid,
+          provider: 'claude'
+        }));
+        continue;
+      }
+
+      // 6. Session state changed — clear status bar on idle (turn-over safety net)
+      if (message.type === 'system' && message.subtype === 'session_state_changed') {
+        if (message.state === 'idle') {
+          ws.send(createNormalizedMessage({
+            kind: 'status',
+            sessionId: sid,
+            provider: 'claude'
+          }));
+        }
         continue;
       }
 

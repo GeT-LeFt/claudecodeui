@@ -26,6 +26,7 @@ interface UseChatSessionStateArgs {
   resetStreamingState: () => void;
   pendingViewSessionRef: MutableRefObject<PendingViewSession | null>;
   sessionStore: SessionStore;
+  backendOpts?: { baseUrl?: string; tokenKey?: string };
 }
 
 interface ScrollRestoreState {
@@ -106,6 +107,7 @@ export function useChatSessionState({
   resetStreamingState,
   pendingViewSessionRef,
   sessionStore,
+  backendOpts,
 }: UseChatSessionStateArgs) {
   const [isLoading, setIsLoading] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(selectedSession?.id || null);
@@ -558,7 +560,7 @@ export function useChatSessionState({
     const fetchInitialTokenUsage = async () => {
       try {
         const url = `/api/projects/${selectedProject.name}/sessions/${selectedSession.id}/token-usage`;
-        const response = await authenticatedFetch(url);
+        const response = await authenticatedFetch(url, {}, backendOpts);
         if (response.ok) {
           setTokenBudget(await response.json());
         } else {

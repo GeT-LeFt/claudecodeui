@@ -128,6 +128,7 @@ function ChatInterface({
     resetStreamingState,
     pendingViewSessionRef,
     sessionStore,
+    backendOpts,
   });
 
   const {
