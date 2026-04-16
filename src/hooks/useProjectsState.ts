@@ -307,9 +307,15 @@ export function useProjectsState({
       (session) => session.id === selectedSession.id,
     );
 
-    if (!updatedSelectedSession) {
-      setSelectedSession(null);
+    if (updatedSelectedSession) {
+      // Session is in the initial batch — sync latest metadata if changed.
+      if (serialize(updatedSelectedSession) !== serialize(selectedSession)) {
+        setSelectedSession(updatedSelectedSession);
+      }
     }
+    // If not found, the session may have been loaded via "show more" and is
+    // not in the initial N sessions.  Keep selectedSession as-is — its
+    // content is loaded independently.
   }, [latestMessage, selectedProject, selectedSession, activeSessions, projects]);
 
   useEffect(() => {

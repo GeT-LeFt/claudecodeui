@@ -129,9 +129,37 @@ export function useSidebarController({
   }, []);
 
   useEffect(() => {
-    setAdditionalSessions({});
-    setInitialSessionsLoaded(new Set());
-    setProjectHasMoreOverrides({});
+    // Incrementally de-duplicate additionalSessions against the fresh
+    // project.sessions instead of clearing everything.  This prevents the
+    // "load more" sessions from disappearing whenever a file-system change
+    // triggers a projects_updated WebSocket message.
+    setAdditionalSessions((prev) => {
+      const next: AdditionalSessionsByProject = {};
+      let changed = false;
+
+      for (const [projectName, sessions] of Object.entries(prev)) {
+        const project = projects.find((p) => p.name === projectName);
+        if (!project) {
+          // Project was removed — drop its additional sessions.
+          changed = true;
+          continue;
+        }
+
+        const primaryIds = new Set((project.sessions || []).map((s) => s.id));
+        const filtered = sessions.filter((s) => !primaryIds.has(s.id));
+
+        if (filtered.length !== sessions.length) {
+          changed = true;
+        }
+        if (filtered.length > 0) {
+          next[projectName] = filtered;
+        } else if (sessions.length > 0) {
+          changed = true;
+        }
+      }
+
+      return changed || Object.keys(prev).length !== Object.keys(next).length ? next : prev;
+    });
   }, [projects]);
 
   useEffect(() => {
