@@ -32,7 +32,7 @@ const PRESET_BACKENDS: BackendConfig[] = [
   },
   {
     id: 'local',
-    name: 'Local Dev',
+    name: 'Local Mac',
     url: 'http://localhost:3001',
   },
 ];
@@ -53,7 +53,11 @@ function migrateBackendStorage(): void {
   const OLD_CLOUD_URL = 'http://47.113.190.177:3001';
   const OLD_CLOUD_TOKEN_KEY = `${AUTH_TOKEN_STORAGE_KEY}::${OLD_CLOUD_URL}`;
 
-  if (activeId === 'cloud' || activeId === 'local') {
+  // 'cloud' 已删除，必须重置为 'current'
+  // 'local' 只在旧用户（有 cloud token 残留）时才重置，否则保留用户的选择
+  if (activeId === 'cloud') {
+    localStorage.setItem(ACTIVE_BACKEND_STORAGE_KEY, 'current');
+  } else if (activeId === 'local' && localStorage.getItem(OLD_CLOUD_TOKEN_KEY)) {
     localStorage.setItem(ACTIVE_BACKEND_STORAGE_KEY, 'current');
   }
 
