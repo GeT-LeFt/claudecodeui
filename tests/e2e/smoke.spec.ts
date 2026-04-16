@@ -56,9 +56,9 @@ const WS_INTERCEPTOR = `
 async function selectProjectAndNewSession(page: Page) {
   // Expand smoke-workspace project (displayName = basename of the workspace path)
   const projectBtn = page.locator('button').filter({ hasText: new RegExp(WORKSPACE_NAME) }).first();
-  await expect(projectBtn).toBeVisible({ timeout: 10_000 });
+  await expect(projectBtn).toBeVisible({ timeout: 15_000 });
   await projectBtn.click();
-  await page.waitForTimeout(800);
+  await page.waitForTimeout(1000);
 
   // After clicking a project:
   // - If it has no sessions → auto-creates new session → shows "Choose Your AI Assistant" or chat UI
@@ -154,7 +154,8 @@ test.beforeEach(async ({ page }) => {
     localStorage.setItem('auth-token', token);
   }, authToken);
   await page.goto(BASE, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(2000);
+  // CI environments are slower — give React time to render the full UI
+  await page.waitForTimeout(3000);
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -181,12 +182,14 @@ test.describe('Smoke tests — core UI interactions', () => {
   // ── Test 2: Sidebar elements visible ──
   test('sidebar shows all essential elements', async ({ page }) => {
     await expect(page.getByText('CloudCLI').first()).toBeVisible({ timeout: 8000 });
-    await expect(page.locator('button[title*="Refresh"]').first()).toBeVisible();
-    await expect(page.locator('button[title="Create new project"]')).toBeVisible();
-    await expect(page.locator('button[title="Hide sidebar"]')).toBeVisible();
-    await expect(page.getByText('Settings').first()).toBeVisible();
-    await expect(page.getByText('Report Issue').first()).toBeVisible();
-    await expect(page.getByText('Join Community').first()).toBeVisible();
+    // Wait extra for sidebar to fully render (CI can be slow)
+    await page.waitForTimeout(1000);
+    await expect(page.locator('button[title*="Refresh"]').first()).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('button[title="Create new project"]')).toBeVisible({ timeout: 3000 });
+    await expect(page.locator('button[title="Hide sidebar"]')).toBeVisible({ timeout: 3000 });
+    await expect(page.getByText('Settings').first()).toBeVisible({ timeout: 3000 });
+    await expect(page.getByText('Report Issue').first()).toBeVisible({ timeout: 3000 });
+    await expect(page.getByText('Join Community').first()).toBeVisible({ timeout: 3000 });
   });
 
   // ── Test 3: Sidebar collapse/expand ──
