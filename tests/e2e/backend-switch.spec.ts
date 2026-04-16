@@ -19,11 +19,32 @@ const TEST_PASS = process.env.TEST_PASSWORD || 'staging-test-2026';
 // Allow self-signed certs (staging uses self-signed SSL)
 test.use({ ignoreHTTPSErrors: true });
 
-// Helper: ensure test account exists (register if needed, ignore if already exists)
+// Helper: ensure test account exists and has completed onboarding
 async function ensureTestAccount(page: import('@playwright/test').Page) {
-  await page.request.post(`${BASE}/api/auth/register`, {
+  // 1. Register (ignore if already exists)
+  const regRes = await page.request.post(`${BASE}/api/auth/register`, {
     data: { username: TEST_USER, password: TEST_PASS },
-  }).catch(() => {}); // ignore errors (account may already exist)
+  }).catch(() => null);
+
+  // 2. If newly registered, complete onboarding via API
+  if (regRes && regRes.status() === 200) {
+    const loginRes = await page.request.post(`${BASE}/api/auth/login`, {
+      data: { username: TEST_USER, password: TEST_PASS },
+    });
+    if (loginRes.status() === 200) {
+      const { token } = await loginRes.json();
+      const headers = { Authorization: `Bearer ${token}` };
+      // Set git config
+      await page.request.post(`${BASE}/api/user/git-config`, {
+        headers,
+        data: { gitName: 'staging-test', gitEmail: 'staging@test.local' },
+      }).catch(() => {});
+      // Mark onboarding complete
+      await page.request.post(`${BASE}/api/user/complete-onboarding`, {
+        headers,
+      }).catch(() => {});
+    }
+  }
 }
 
 // Helper: login via API + inject token into localStorage
