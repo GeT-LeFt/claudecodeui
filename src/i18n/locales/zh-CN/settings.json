@@ -505,5 +505,6 @@
     "noUrl": "请输入 URL",
     "noName": "请输入名称",
     "manageBackends": "管理后端..."
-  }
+  },
+  "logout": "退出登录"
 }

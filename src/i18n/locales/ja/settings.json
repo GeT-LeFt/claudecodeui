@@ -480,5 +480,6 @@
     "installAriaLabel": "プラグインのgitリポジトリURL",
     "tab": "タブ",
     "runningStatus": "実行中"
-  }
+  },
+  "logout": "ログアウト"
 }

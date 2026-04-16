@@ -480,5 +480,6 @@
     "installAriaLabel": "플러그인 git 저장소 URL",
     "tab": "탭",
     "runningStatus": "실행 중"
-  }
+  },
+  "logout": "로그아웃"
 }

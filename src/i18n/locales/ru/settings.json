@@ -460,5 +460,6 @@
     "installAriaLabel": "URL git-репозитория плагина",
     "tab": "вкладка",
     "runningStatus": "запущен"
-  }
+  },
+  "logout": "Выйти"
 }

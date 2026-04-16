@@ -29,7 +29,7 @@ const NAV_ITEMS: NavItem[] = [
 ];
 
 export default function SettingsSidebar({ activeTab, onChange, onLogout }: SettingsSidebarProps) {
-  const { t } = useTranslation(['settings', 'common']);
+  const { t } = useTranslation('settings');
 
   return (
     <>
@@ -65,7 +65,7 @@ export default function SettingsSidebar({ activeTab, onChange, onLogout }: Setti
               className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-destructive transition-colors duration-150 hover:bg-destructive/10 active:bg-destructive/20"
             >
               <LogOut className="h-4 w-4 flex-shrink-0" />
-              {t('common:auth.logout')}
+              {t('logout')}
             </button>
           </div>
         )}
@@ -96,7 +96,7 @@ export default function SettingsSidebar({ activeTab, onChange, onLogout }: Setti
               className="flex-shrink-0 text-destructive"
             >
               <LogOut className="h-3.5 w-3.5" />
-              {t('common:auth.logout')}
+              {t('logout')}
             </Pill>
           )}
         </PillBar>

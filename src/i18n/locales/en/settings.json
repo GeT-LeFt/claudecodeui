@@ -511,5 +511,6 @@
     "noUrl": "Please enter a URL",
     "noName": "Please enter a name",
     "manageBackends": "Manage Backends..."
-  }
+  },
+  "logout": "Logout"
 }
