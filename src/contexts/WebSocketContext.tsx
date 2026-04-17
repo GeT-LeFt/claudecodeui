@@ -53,9 +53,12 @@ const useWebSocketProviderState = (): WebSocketContextType => {
   // to ensure the context value updates when the socket instance changes.
   const [wsInstance, setWsInstance] = useState<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectDelayRef = useRef(1000);
   const { token } = useAuth();
   const { activeBackend } = useBackend();
   const backendUrl = activeBackend.url;
+
+  const MAX_RECONNECT_DELAY = 30000;
 
   const connect = useCallback(() => {
     if (unmountedRef.current) return;
@@ -79,6 +82,7 @@ const useWebSocketProviderState = (): WebSocketContextType => {
 
       websocket.onopen = () => {
         if (generation !== generationRef.current) { websocket.close(); return; }
+        reconnectDelayRef.current = 1000;
         setIsConnected(true);
         wsRef.current = websocket;
         setWsInstance(websocket);
@@ -104,10 +108,13 @@ const useWebSocketProviderState = (): WebSocketContextType => {
         wsRef.current = null;
         setWsInstance(null);
 
+        const delay = reconnectDelayRef.current;
+        reconnectDelayRef.current = Math.min(delay * 2, MAX_RECONNECT_DELAY);
+
         reconnectTimeoutRef.current = setTimeout(() => {
           if (unmountedRef.current || generation !== generationRef.current) return;
           connectRef.current();
-        }, 3000);
+        }, delay);
       };
 
       websocket.onerror = (error) => {

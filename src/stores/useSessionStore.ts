@@ -146,6 +146,8 @@ function recomputeMergedIfNeeded(slot: SessionSlot): boolean {
 
 const STALE_THRESHOLD_MS = 30_000;
 
+const REFRESH_COOLDOWN_MS = 10_000;
+
 const MAX_REALTIME_MESSAGES = 500;
 
 // ─── Hook ────────────────────────────────────────────────────────────────────
@@ -325,6 +327,8 @@ export function useSessionStore(backendOpts: { baseUrl?: string; tokenKey?: stri
   /**
    * Re-fetch serverMessages from the unified endpoint (e.g., on projects_updated).
    */
+  const lastRefreshFailRef = useRef<Map<string, number>>(new Map());
+
   const refreshFromServer = useCallback(async (
     sessionId: string,
     opts: {
@@ -333,6 +337,9 @@ export function useSessionStore(backendOpts: { baseUrl?: string; tokenKey?: stri
       projectPath?: string;
     } = {},
   ) => {
+    const lastFail = lastRefreshFailRef.current.get(sessionId) ?? 0;
+    if (Date.now() - lastFail < REFRESH_COOLDOWN_MS) return;
+
     const slot = getSlot(sessionId);
     try {
       const params = new URLSearchParams();
@@ -347,6 +354,7 @@ export function useSessionStore(backendOpts: { baseUrl?: string; tokenKey?: stri
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
 
+      lastRefreshFailRef.current.delete(sessionId);
       slot.serverMessages = data.messages || [];
       slot.total = data.total ?? slot.serverMessages.length;
       slot.hasMore = Boolean(data.hasMore);
@@ -356,6 +364,7 @@ export function useSessionStore(backendOpts: { baseUrl?: string; tokenKey?: stri
       recomputeMergedIfNeeded(slot);
       notify(sessionId);
     } catch (error) {
+      lastRefreshFailRef.current.set(sessionId, Date.now());
       console.error(`[SessionStore] refresh failed for ${sessionId}:`, error);
     }
   }, [getSlot, notify]);
