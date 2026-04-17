@@ -226,16 +226,19 @@ jobs:
             echo "[Deploy] Environment: $DEPLOY_ENV"
             echo "[Deploy] Container: $CONTAINER_NAME, Port: $HOST_PORT"
 
-            echo "[Deploy] Cleaning up old Docker resources..."
-            docker image prune -af --filter "until=72h" || true
-            docker builder prune -af || true
+            echo "[Deploy] Stopping old container to free disk space..."
+            docker stop "$CONTAINER_NAME" 2>/dev/null || true
+            docker rm "$CONTAINER_NAME" 2>/dev/null || true
+
+            echo "[Deploy] Aggressive cleanup — reclaim all unused Docker resources..."
+            docker system prune -af || true
+            docker volume prune -f || true
+
+            echo "[Deploy] Disk space after cleanup:"
+            df -h / || true
 
             echo "[Deploy] Pulling image: $IMAGE"
             docker pull "$IMAGE"
-
-            echo "[Deploy] Stopping old container..."
-            docker stop "$CONTAINER_NAME" 2>/dev/null || true
-            docker rm "$CONTAINER_NAME" 2>/dev/null || true
 
             echo "[Deploy] Starting new container..."
             mkdir -p "$DATA_DIR"
