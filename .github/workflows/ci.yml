@@ -240,6 +240,9 @@ jobs:
             echo "[Deploy] Pulling image: $IMAGE"
             docker pull "$IMAGE"
 
+            echo "[Deploy] Resetting user database for fresh registration..."
+            rm -f "$DATA_DIR/auth.db"
+
             echo "[Deploy] Starting new container..."
             mkdir -p "$DATA_DIR"
             docker run -d \
