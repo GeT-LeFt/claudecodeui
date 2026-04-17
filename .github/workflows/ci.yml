@@ -249,6 +249,7 @@ jobs:
 
                 # Staging: setup/update nginx reverse proxy
                 if [ "$DEPLOY_ENV" = "staging" ]; then
+                  mkdir -p /tmp/nginx_proxy && chmod 777 /tmp/nginx_proxy
                   echo "[Deploy] Writing staging nginx config (8089 HTTP + 8444 HTTPS)..."
                   cat > /etc/nginx/sites-available/cloudcli-staging << 'NGINX_CONF'
             server {
@@ -270,6 +271,8 @@ jobs:
                     proxy_buffer_size 128k;
                     proxy_buffers 8 256k;
                     proxy_busy_buffers_size 512k;
+                    proxy_temp_path /tmp/nginx_proxy;
+                    proxy_max_temp_file_size 1024m;
                 }
             }
             server {
@@ -295,6 +298,8 @@ jobs:
                     proxy_buffer_size 128k;
                     proxy_buffers 8 256k;
                     proxy_busy_buffers_size 512k;
+                    proxy_temp_path /tmp/nginx_proxy;
+                    proxy_max_temp_file_size 1024m;
                 }
             }
             NGINX_CONF
