@@ -118,6 +118,7 @@ export function useChatSessionState({
   const [canAbortSession, setCanAbortSession] = useState(false);
   const [isUserScrolledUp, setIsUserScrolledUp] = useState(false);
   const [tokenBudget, setTokenBudget] = useState<Record<string, unknown> | null>(null);
+  const wsTokenBudgetRef = useRef(false);
   const [visibleMessageCount, setVisibleMessageCount] = useState(INITIAL_VISIBLE_MESSAGES);
   const [claudeStatus, setClaudeStatus] = useState<{ text: string; tokens: number; can_interrupt: boolean } | null>(null);
   const [allMessagesLoaded, setAllMessagesLoaded] = useState(false);
@@ -552,15 +553,20 @@ export function useChatSessionState({
   useEffect(() => {
     if (!selectedProject || !selectedSession?.id || selectedSession.id.startsWith('new-session-')) {
       setTokenBudget(null);
+      wsTokenBudgetRef.current = false;
       return;
     }
     const sessionProvider = selectedSession.__provider || 'claude';
     if (sessionProvider !== 'claude') return;
 
+    wsTokenBudgetRef.current = false;
+
     const fetchInitialTokenUsage = async () => {
+      if (wsTokenBudgetRef.current) return;
       try {
         const url = `/api/projects/${selectedProject.name}/sessions/${selectedSession.id}/token-usage`;
         const response = await authenticatedFetch(url, {}, backendOpts);
+        if (wsTokenBudgetRef.current) return;
         if (response.ok) {
           setTokenBudget(await response.json());
         } else {
@@ -723,7 +729,10 @@ export function useChatSessionState({
     isUserScrolledUp,
     setIsUserScrolledUp,
     tokenBudget,
-    setTokenBudget,
+    setTokenBudget: useCallback((budget: Record<string, unknown> | null) => {
+      if (budget) wsTokenBudgetRef.current = true;
+      setTokenBudget(budget);
+    }, []),
     visibleMessageCount,
     visibleMessages,
     loadEarlierMessages,

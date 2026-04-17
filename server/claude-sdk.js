@@ -292,16 +292,13 @@ function extractTokenBudget(resultMessage) {
     return null;
   }
 
-  // Use cumulative tokens if available (tracks total for the session)
-  // Otherwise fall back to per-request tokens
-  const inputTokens = modelData.cumulativeInputTokens || modelData.inputTokens || 0;
-  const outputTokens = modelData.cumulativeOutputTokens || modelData.outputTokens || 0;
-  const cacheReadTokens = modelData.cumulativeCacheReadInputTokens || modelData.cacheReadInputTokens || 0;
-  const cacheCreationTokens = modelData.cumulativeCacheCreationInputTokens || modelData.cacheCreationInputTokens || 0;
+  // Use per-request tokens (not cumulative) — these represent the actual context
+  // window usage for the latest request, matching the REST endpoint calculation.
+  const inputTokens = modelData.inputTokens || 0;
+  const cacheReadTokens = modelData.cacheReadInputTokens || 0;
+  const cacheCreationTokens = modelData.cacheCreationInputTokens || 0;
 
-  // Total used = input + output (input already includes cache read/creation tokens in Anthropic API)
-  // Cache tokens are tracked separately for display purposes only
-  const totalUsed = inputTokens + outputTokens;
+  const totalUsed = inputTokens + cacheReadTokens + cacheCreationTokens;
 
   // Use configured context window budget from environment (default 160000)
   // This is the user's budget limit, not the model's context window
