@@ -10,7 +10,7 @@ const mockSwitchBackend = vi.fn();
 
 const presetBackends = [
   { id: 'current', name: 'Current Server', url: '' },
-  { id: 'local', name: 'Local Mac', url: 'http://localhost:3001' },
+  { id: 'local', name: 'My Mac', url: 'https://47.113.190.177:8445' },
 ];
 
 vi.mock('../../../../../contexts/BackendContext', () => ({
@@ -44,14 +44,14 @@ describe('BackendSwitcher', () => {
     render(<BackendSwitcher />);
     await user.click(screen.getByText('Current Server'));
     // Both backends should appear in the dropdown.
-    expect(screen.getByText('Local Mac')).toBeInTheDocument();
+    expect(screen.getByText('My Mac')).toBeInTheDocument();
   });
 
   it('calls switchBackend when selecting a different backend', async () => {
     const user = userEvent.setup();
     render(<BackendSwitcher />);
     await user.click(screen.getByText('Current Server'));
-    await user.click(screen.getByText('Local Mac'));
+    await user.click(screen.getByText('My Mac'));
     expect(mockSwitchBackend).toHaveBeenCalledWith('local');
   });
 
@@ -59,11 +59,11 @@ describe('BackendSwitcher', () => {
     const user = userEvent.setup();
     render(<BackendSwitcher />);
     await user.click(screen.getByText('Current Server'));
-    expect(screen.getByText('Local Mac')).toBeInTheDocument();
+    expect(screen.getByText('My Mac')).toBeInTheDocument();
     // Click outside.
     await user.click(document.body);
     await waitFor(() => {
-      expect(screen.queryByText('Local Mac')).not.toBeInTheDocument();
+      expect(screen.queryByText('My Mac')).not.toBeInTheDocument();
     });
   });
 

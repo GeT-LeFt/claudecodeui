@@ -42,15 +42,15 @@ const PRESET_BACKENDS: BackendConfig[] = [
   },
   {
     id: 'local',
-    name: 'Local Mac',
-    url: 'http://localhost:3001',
+    name: 'My Mac',
+    url: 'https://47.113.190.177:8445',
   },
 ];
 
 // ────────────────────── Migration ──────────────────────
 // Commit 55e45bd changed presets:
 //   OLD: 'local' → localhost:3001, 'cloud' → 47.113.190.177:3001
-//   NEW: 'current' → '' (same-origin), 'local' → localhost:3001
+//   NEW: 'current' → '' (same-origin), 'local' → ECS proxy to Mac
 // Old 'cloud'/'local' users may have stale backend IDs and orphaned tokens.
 
 const MIGRATION_DONE_KEY = 'backend-migration-v1';

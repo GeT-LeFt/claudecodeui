@@ -12,7 +12,7 @@ const mockRemoveBackend = vi.fn();
 
 const presetBackends = [
   { id: 'current', name: 'Current Server', url: '' },
-  { id: 'local', name: 'Local Mac', url: 'http://localhost:3001' },
+  { id: 'local', name: 'My Mac', url: 'https://47.113.190.177:8445' },
 ];
 
 const customBackend = { id: 'custom-1', name: 'My Cloud', url: 'https://cloud.example.com' };
@@ -46,7 +46,7 @@ describe('BackendSettingsTab', () => {
   it('renders all backends', () => {
     renderWithProviders(<BackendSettingsTab />);
     expect(screen.getByText('Current Server')).toBeInTheDocument();
-    expect(screen.getByText('Local Mac')).toBeInTheDocument();
+    expect(screen.getByText('My Mac')).toBeInTheDocument();
     expect(screen.getByText('My Cloud')).toBeInTheDocument();
   });
 
