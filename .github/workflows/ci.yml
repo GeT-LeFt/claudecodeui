@@ -232,7 +232,6 @@ jobs:
 
             echo "[Deploy] Aggressive cleanup — reclaim all unused Docker resources..."
             docker system prune -af || true
-            docker volume prune -f || true
 
             echo "[Deploy] Disk space after cleanup:"
             df -h / || true
@@ -240,11 +239,9 @@ jobs:
             echo "[Deploy] Pulling image: $IMAGE"
             docker pull "$IMAGE"
 
-            echo "[Deploy] Resetting user database for fresh registration..."
-            rm -f "$DATA_DIR/auth.db"
-
             echo "[Deploy] Starting new container..."
             mkdir -p "$DATA_DIR"
+            chmod 777 "$DATA_DIR"
             docker run -d \
               --name "$CONTAINER_NAME" \
               --restart unless-stopped \
