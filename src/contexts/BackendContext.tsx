@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
+
 import { AUTH_TOKEN_STORAGE_KEY, getBackendTokenKey } from '../components/auth/constants';
 
 // ────────────────────── Types ──────────────────────
@@ -13,6 +14,9 @@ type BackendContextValue = {
   backends: BackendConfig[];
   activeBackend: BackendConfig;
   switchBackend: (id: string) => void;
+  addBackend: (name: string, url: string) => string;
+  removeBackend: (id: string) => void;
+  updateBackend: (id: string, name: string, url: string) => void;
   getBaseUrl: () => string;
   getAuthTokenKey: () => string;
   /** Monotonically increasing counter; increments on every switchBackend call.
@@ -24,20 +28,17 @@ type BackendContextValue = {
 // ────────────────────── Constants ──────────────────────
 
 const ACTIVE_BACKEND_STORAGE_KEY = 'active-backend-id';
+const CUSTOM_BACKENDS_STORAGE_KEY = 'custom-backends';
 
 // Pre-configured environments — no manual setup needed
 // 'current' uses same-origin (empty URL) so API calls follow the page's own URL.
 // This is the correct default for any deployment (staging, production, local dev via Vite proxy).
+// Users can add custom backends (e.g. localhost:3001) via Settings → Backends.
 const PRESET_BACKENDS: BackendConfig[] = [
   {
     id: 'current',
     name: 'Current Server',
     url: '',
-  },
-  {
-    id: 'local',
-    name: 'Local Mac',
-    url: 'http://localhost:3001',
   },
 ];
 
@@ -79,17 +80,31 @@ migrateBackendStorage();
 
 // ────────────────────── Helpers ──────────────────────
 
-const isLocalDev = (): boolean => {
-  if (typeof window === 'undefined') return false;
-  const host = window.location.hostname;
-  return host === 'localhost' || host === '127.0.0.1';
+const loadCustomBackends = (): BackendConfig[] => {
+  try {
+    const raw = localStorage.getItem(CUSTOM_BACKENDS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (b: unknown): b is BackendConfig =>
+        typeof b === 'object' && b !== null && 'id' in b && 'name' in b && 'url' in b,
+    );
+  } catch {
+    return [];
+  }
 };
+
+const saveCustomBackends = (backends: BackendConfig[]) => {
+  localStorage.setItem(CUSTOM_BACKENDS_STORAGE_KEY, JSON.stringify(backends));
+};
+
+const getAllBackends = (): BackendConfig[] => [...PRESET_BACKENDS, ...loadCustomBackends()];
 
 const loadActiveBackendId = (): string => {
   const stored = localStorage.getItem(ACTIVE_BACKEND_STORAGE_KEY) || 'current';
-  // 'local' backend (localhost:3001) only makes sense when the page itself is on localhost.
-  // On staging/production, force back to 'current' (same-origin).
-  if (stored === 'local' && !isLocalDev()) {
+  // If the stored ID no longer exists (e.g. user deleted a custom backend), fall back to 'current'.
+  if (!getAllBackends().some((b) => b.id === stored)) {
     localStorage.setItem(ACTIVE_BACKEND_STORAGE_KEY, 'current');
     return 'current';
   }
@@ -116,27 +131,83 @@ export function useBackend(): BackendContextValue {
 
 export function BackendProvider({ children }: { children: React.ReactNode }) {
   const [activeBackendId, setActiveBackendId] = useState<string>(loadActiveBackendId);
+  const [customBackends, setCustomBackends] = useState<BackendConfig[]>(loadCustomBackends);
   // L4: Monotonic counter so consumers can detect stale in-flight responses after a backend switch.
   const backendVersionRef = useRef(0);
   const [backendVersion, setBackendVersion] = useState(0);
 
-  const activeBackend = useMemo(
-    () => PRESET_BACKENDS.find((b) => b.id === activeBackendId) || PRESET_BACKENDS[0],
-    [activeBackendId],
+  const allBackends = useMemo(
+    () => [...PRESET_BACKENDS, ...customBackends],
+    [customBackends],
   );
+
+  const activeBackend = useMemo(
+    () => allBackends.find((b) => b.id === activeBackendId) || PRESET_BACKENDS[0],
+    [activeBackendId, allBackends],
+  );
+
+  const bumpVersion = useCallback(() => {
+    backendVersionRef.current += 1;
+    setBackendVersion(backendVersionRef.current);
+  }, []);
 
   const switchBackend = useCallback(
     (id: string) => {
-      if (id === 'local' && !isLocalDev()) return;
-      if (PRESET_BACKENDS.some((b) => b.id === id)) {
+      if (allBackends.some((b) => b.id === id)) {
         setActiveBackendId(id);
         saveActiveBackendId(id);
-        // L4: Bump version so consumers can discard stale responses from the previous backend.
-        backendVersionRef.current += 1;
-        setBackendVersion(backendVersionRef.current);
+        bumpVersion();
       }
     },
+    [allBackends, bumpVersion],
+  );
+
+  const addBackend = useCallback(
+    (name: string, url: string): string => {
+      const id = `custom-${Date.now()}`;
+      const newBackend: BackendConfig = { id, name, url };
+      setCustomBackends((prev) => {
+        const next = [...prev, newBackend];
+        saveCustomBackends(next);
+        return next;
+      });
+      return id;
+    },
     [],
+  );
+
+  const removeBackend = useCallback(
+    (id: string) => {
+      if (id === 'current') return;
+      setCustomBackends((prev) => {
+        const next = prev.filter((b) => b.id !== id);
+        saveCustomBackends(next);
+        return next;
+      });
+      // If removing the active backend, fall back to 'current'
+      setActiveBackendId((prev) => {
+        if (prev === id) {
+          saveActiveBackendId('current');
+          bumpVersion();
+          return 'current';
+        }
+        return prev;
+      });
+    },
+    [bumpVersion],
+  );
+
+  const updateBackend = useCallback(
+    (id: string, name: string, url: string) => {
+      if (id === 'current') return;
+      setCustomBackends((prev) => {
+        const next = prev.map((b) => (b.id === id ? { ...b, name, url } : b));
+        saveCustomBackends(next);
+        return next;
+      });
+      bumpVersion();
+    },
+    [bumpVersion],
   );
 
   const getBaseUrl = useCallback(() => activeBackend.url, [activeBackend]);
@@ -146,23 +217,19 @@ export function BackendProvider({ children }: { children: React.ReactNode }) {
     [activeBackend],
   );
 
-  // L2: isLocalDev() depends on window.location.hostname which never changes during a session,
-  // so the empty dependency array is intentionally correct here.
-  const visibleBackends = useMemo(
-    () => isLocalDev() ? PRESET_BACKENDS : PRESET_BACKENDS.filter((b) => b.id !== 'local'),
-    [],
-  );
-
   const contextValue = useMemo<BackendContextValue>(
     () => ({
-      backends: visibleBackends,
+      backends: allBackends,
       activeBackend,
       switchBackend,
+      addBackend,
+      removeBackend,
+      updateBackend,
       getBaseUrl,
       getAuthTokenKey,
       backendVersion,
     }),
-    [visibleBackends, activeBackend, switchBackend, getBaseUrl, getAuthTokenKey, backendVersion],
+    [allBackends, activeBackend, switchBackend, addBackend, removeBackend, updateBackend, getBaseUrl, getAuthTokenKey, backendVersion],
   );
 
   return <BackendContext.Provider value={contextValue}>{children}</BackendContext.Provider>;

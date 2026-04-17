@@ -1,9 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
-import { Server, ChevronDown, Check } from 'lucide-react';
+import { Server, ChevronDown, Check, Settings } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+
 import { useBackend } from '../../../../contexts/BackendContext';
 
 export default function BackendSwitcher() {
   const { backends, activeBackend, switchBackend } = useBackend();
+  const { t } = useTranslation('settings');
   const [isOpen, setIsOpen] = useState(false);
   const [backendStatus, setBackendStatus] = useState<'checking' | 'reachable' | 'unreachable'>('checking');
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -85,6 +88,17 @@ export default function BackendSwitcher() {
                 )}
               </button>
             ))}
+            <div className="border-t border-border" />
+            <button
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
+              onClick={() => {
+                (window as any).openSettings?.('backends');
+                setIsOpen(false);
+              }}
+            >
+              <Settings className="h-3 w-3 flex-shrink-0" />
+              <span>{t('backends.manageBackends')}</span>
+            </button>
           </div>
         </div>
       )}

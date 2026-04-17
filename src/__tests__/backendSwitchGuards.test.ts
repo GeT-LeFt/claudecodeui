@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
- * Tests for BackendContext module-level logic (L4 / migration):
+ * Tests for BackendContext module-level logic:
  * - migrateBackendStorage() runs on import, migrating old 'cloud' → 'current'
- * - loadActiveBackendId() guards against 'local' on non-localhost hosts
+ * - loadActiveBackendId() falls back to 'current' when stored ID doesn't exist
+ * - Custom backends are persisted via localStorage 'custom-backends' key
  *
  * Strategy: mock localStorage + window.location, then dynamic-import the module.
  * migrateBackendStorage runs at module init time; loadActiveBackendId runs when
@@ -22,7 +23,7 @@ const mockLocalStorage = {
 vi.stubGlobal('localStorage', mockLocalStorage);
 
 // Track useState initializer calls so we can capture loadActiveBackendId's return value
-let lastUseStateInitResult: unknown = undefined;
+let _lastUseStateInitResult: unknown = undefined;
 
 vi.mock('react', () => ({
   createContext: vi.fn(() => ({ Provider: vi.fn(({ children }: any) => children) })),
@@ -32,7 +33,7 @@ vi.mock('react', () => ({
   useRef: vi.fn((v: unknown) => ({ current: v })),
   useState: vi.fn((v: unknown) => {
     const resolved = typeof v === 'function' ? (v as () => unknown)() : v;
-    lastUseStateInitResult = resolved;
+    _lastUseStateInitResult = resolved;
     return [resolved, vi.fn()];
   }),
 }));
@@ -40,13 +41,14 @@ vi.mock('react', () => ({
 const ACTIVE_KEY = 'active-backend-id';
 const MIGRATION_KEY = 'backend-migration-v1';
 const AUTH_TOKEN_KEY = 'auth-token';
+const CUSTOM_BACKENDS_KEY = 'custom-backends';
 const OLD_CLOUD_URL = 'http://47.113.190.177:3001';
 const OLD_CLOUD_TOKEN_KEY = `${AUTH_TOKEN_KEY}::${OLD_CLOUD_URL}`;
 
 beforeEach(() => {
   vi.clearAllMocks();
   Object.keys(storage).forEach((k) => delete storage[k]);
-  lastUseStateInitResult = undefined;
+  _lastUseStateInitResult = undefined;
   vi.resetModules();
 });
 
@@ -117,27 +119,48 @@ describe('migrateBackendStorage (module init)', () => {
   });
 });
 
-// ─── loadActiveBackendId guard tests ────────────────────────────────────────
+// ─── loadActiveBackendId + custom backends tests ────────────────────────────
 
-describe('loadActiveBackendId guard logic (L4)', () => {
-  it('preserves "local" on localhost', async () => {
-    storage[MIGRATION_KEY] = '1';
-    storage[ACTIVE_KEY] = 'local';
-    await importAndInit('localhost');
-    expect(storage[ACTIVE_KEY]).toBe('local');
-  });
-
-  it('resets "local" to "current" on non-localhost host', async () => {
-    storage[MIGRATION_KEY] = '1';
-    storage[ACTIVE_KEY] = 'local';
-    await importAndInit('47.113.190.177');
-    expect(storage[ACTIVE_KEY]).toBe('current');
-  });
-
+describe('loadActiveBackendId with custom backends', () => {
   it('"current" is valid on any host', async () => {
     storage[MIGRATION_KEY] = '1';
     storage[ACTIVE_KEY] = 'current';
     await importAndInit('47.113.190.177');
+    expect(storage[ACTIVE_KEY]).toBe('current');
+  });
+
+  it('falls back to "current" when stored ID does not exist in any backend', async () => {
+    storage[MIGRATION_KEY] = '1';
+    storage[ACTIVE_KEY] = 'nonexistent-backend';
+    await importAndInit('localhost');
+    expect(storage[ACTIVE_KEY]).toBe('current');
+  });
+
+  it('preserves stored ID when it matches a custom backend', async () => {
+    storage[MIGRATION_KEY] = '1';
+    const customBackend = { id: 'custom-123', name: 'My Server', url: 'http://my-server:3001' };
+    storage[CUSTOM_BACKENDS_KEY] = JSON.stringify([customBackend]);
+    storage[ACTIVE_KEY] = 'custom-123';
+    await importAndInit('47.113.190.177');
+    // Should preserve the custom backend selection
+    expect(storage[ACTIVE_KEY]).toBe('custom-123');
+  });
+
+  it('falls back to "current" when custom backend is removed but was active', async () => {
+    storage[MIGRATION_KEY] = '1';
+    // Active backend was custom-456, but it's no longer in the custom backends list
+    storage[ACTIVE_KEY] = 'custom-456';
+    storage[CUSTOM_BACKENDS_KEY] = JSON.stringify([]);
+    await importAndInit('localhost');
+    expect(storage[ACTIVE_KEY]).toBe('current');
+  });
+
+  it('handles malformed custom-backends JSON gracefully', async () => {
+    storage[MIGRATION_KEY] = '1';
+    storage[ACTIVE_KEY] = 'current';
+    storage[CUSTOM_BACKENDS_KEY] = 'not-valid-json{{{';
+    await importAndInit('localhost');
+    // Should not crash, falls back gracefully
     expect(storage[ACTIVE_KEY]).toBe('current');
   });
 });
