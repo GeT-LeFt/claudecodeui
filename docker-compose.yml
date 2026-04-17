@@ -10,6 +10,8 @@ services:
       - .env
     environment:
       - NODE_ENV=production
+    volumes:
+      - cloudcli-data:/data
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
@@ -35,3 +37,6 @@ services:
       - NODE_ENV=development
     profiles:
       - dev
+
+volumes:
+  cloudcli-data:

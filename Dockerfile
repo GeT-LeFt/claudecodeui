@@ -33,6 +33,10 @@ RUN groupadd --gid 1001 appuser && \
 
 WORKDIR /app
 
+# Create a stable data directory for the SQLite database.
+# Callers should mount a host volume at /data to persist auth.db across restarts.
+RUN mkdir -p /data && chown appuser:appuser /data
+
 # Copy pre-built production node_modules (with native addons) from builder
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
@@ -50,6 +54,7 @@ USER appuser
 ENV NODE_ENV=production
 ENV SERVER_PORT=3001
 ENV HOST=0.0.0.0
+ENV DATABASE_PATH=/data/auth.db
 
 EXPOSE 3001
 

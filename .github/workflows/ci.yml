@@ -55,9 +55,10 @@ jobs:
           path: coverage/
           retention-days: 14
 
-  # ─── Stage 2b: E2E Tests ──────────────────────────────────
+  # ─── Stage 2b: E2E Tests (push only — PRs skip for speed) ──
   e2e-test:
     needs: lint-and-typecheck
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -237,7 +238,7 @@ jobs:
               --name "$CONTAINER_NAME" \
               --restart unless-stopped \
               -p "$HOST_PORT":3001 \
-              -v "$DATA_DIR":/root/.cloudcli \
+              -v "$DATA_DIR":/data \
               --env-file "$ENV_FILE" \
               "$IMAGE"
 

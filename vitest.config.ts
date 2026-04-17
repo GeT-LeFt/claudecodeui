@@ -3,8 +3,10 @@ import path from 'path';
 
 export default defineConfig({
   test: {
-    include: ['**/*.test.{ts,js}', '**/*.spec.{ts,js}'],
+    include: ['**/*.test.{ts,tsx,js}', '**/*.spec.{ts,js}'],
     exclude: ['tests/e2e/**', 'node_modules', 'dist', 'dist-server'],
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'json-summary', 'lcov'],
