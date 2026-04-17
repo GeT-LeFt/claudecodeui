@@ -225,6 +225,11 @@ jobs:
 
             echo "[Deploy] Environment: $DEPLOY_ENV"
             echo "[Deploy] Container: $CONTAINER_NAME, Port: $HOST_PORT"
+
+            echo "[Deploy] Cleaning up old Docker resources..."
+            docker image prune -af --filter "until=72h" || true
+            docker builder prune -af || true
+
             echo "[Deploy] Pulling image: $IMAGE"
             docker pull "$IMAGE"
 
