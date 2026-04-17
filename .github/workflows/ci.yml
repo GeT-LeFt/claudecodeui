@@ -113,9 +113,9 @@ jobs:
 
   # ─── Stage 3: Docker Build & Push to ACR ──────────────────
   docker-build-push:
-    needs: [unit-test]
+    needs: [unit-test, e2e-test]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push'
+    if: ${{ github.event_name == 'push' && !cancelled() && needs.unit-test.result == 'success' }}
     outputs:
       image-tag: ${{ steps.meta.outputs.tag }}
       deploy-env: ${{ steps.meta.outputs.env }}

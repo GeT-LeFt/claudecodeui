@@ -67,7 +67,7 @@ export default function BackendSettingsTab() {
       <div className="space-y-3">
         {backends.map((backend) => {
           const isActive = backend.id === activeBackend.id;
-          const isPreset = backend.id === 'current';
+          const isPreset = backend.id === 'current' || backend.id === 'local';
           const testResult = testResults[backend.id];
 
           return (

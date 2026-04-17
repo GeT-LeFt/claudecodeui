@@ -33,12 +33,17 @@ const CUSTOM_BACKENDS_STORAGE_KEY = 'custom-backends';
 // Pre-configured environments — no manual setup needed
 // 'current' uses same-origin (empty URL) so API calls follow the page's own URL.
 // This is the correct default for any deployment (staging, production, local dev via Vite proxy).
-// Users can add custom backends (e.g. localhost:3001) via Settings → Backends.
+// Users can add more custom backends via Settings → Backends.
 const PRESET_BACKENDS: BackendConfig[] = [
   {
     id: 'current',
     name: 'Current Server',
     url: '',
+  },
+  {
+    id: 'local',
+    name: 'Local Mac',
+    url: 'http://localhost:3001',
   },
 ];
 
@@ -178,7 +183,7 @@ export function BackendProvider({ children }: { children: React.ReactNode }) {
 
   const removeBackend = useCallback(
     (id: string) => {
-      if (id === 'current') return;
+      if (PRESET_BACKENDS.some((b) => b.id === id)) return;
       setCustomBackends((prev) => {
         const next = prev.filter((b) => b.id !== id);
         saveCustomBackends(next);
@@ -199,7 +204,7 @@ export function BackendProvider({ children }: { children: React.ReactNode }) {
 
   const updateBackend = useCallback(
     (id: string, name: string, url: string) => {
-      if (id === 'current') return;
+      if (PRESET_BACKENDS.some((b) => b.id === id)) return;
       setCustomBackends((prev) => {
         const next = prev.map((b) => (b.id === id ? { ...b, name, url } : b));
         saveCustomBackends(next);
